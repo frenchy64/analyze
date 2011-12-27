@@ -1,10 +1,10 @@
-* Analyzer for Clojure
+# Analyzer for Clojure
 
 This is a port of the ClojureScript analyzer, a ClojureScript compilation phase.
 
-* Usage
+# Usage
 
-** Analyze statements
+## Analyze statements
 
 To see what the analyzer outputs for individual statements, use `analyze.core/analyze`.
 
@@ -37,7 +37,7 @@ To see what the analyzer outputs for individual statements, use `analyze.core/an
    :form +}]}
 ```
 
-** Analyze namespaces
+## Analyze namespaces
 
 `analyze.core/analyze-namespace` takes a symbol represeting a namespace, and returns a vector of AST's representing macroexpanded
 forms in that namespace.
