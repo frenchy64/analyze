@@ -36,7 +36,10 @@
   => 'clojure.core/+)
 
 (facts "implicit clojure.core exclude"
-  (-> (a/analyze (assoc-in testenv [:ns :excludes] '#{+}) '+)
+  (-> (a/analyze (-> testenv 
+                   (assoc-in [:ns :excludes] '#{+})
+                   (assoc-in [:ns :defs] '{+ +})) 
+                 '+)
     :info :name)
   => 'test.ns/+)
 

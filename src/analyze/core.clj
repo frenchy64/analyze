@@ -41,11 +41,6 @@
                    (when (:line env)
                      (str " at line " (:line env)))))))))))
 
-(comment
-(resolve-alias {:ns {:requires '{core clojure.core}}} 'core)
-(resolve-alias {:ns {:imports '{Blah my.class.Blah}}} 'Blah)
-  )
-
 (defn resolve-class [env name]
   (try
     (if-let [cobj (resolve name)]
@@ -429,7 +424,7 @@
                            (assoc-in [name :excludes] excludes)
                            (assoc-in [name :imports] imports)
                            (assoc-in [name :uses] uses)
-                           (assoc-in [name :requires])))
+                           (assoc-in [name :requires] requires)))
     {:env env :op :ns :name name :uses uses :requires requires :excludes excludes}))
 
 (defmethod parse 'deftype*
