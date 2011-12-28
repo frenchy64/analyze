@@ -2,6 +2,18 @@
 
 This is a port of the ClojureScript analyzer, a ClojureScript compilation phase.
 
+# Differences from ClojureScript
+
+- Distinction between :statement / :return / :expr unnessessary 
+
+# Challenges
+
+* Clojure has load-file, require, use and refer
+** Impossible to statically verify 
+** callable at any time
+*** some cases impossible to statically predict aliases, which classes are loaded
+**** should emit warning in those cases
+
 # Usage
 
 ## Analyze statements
