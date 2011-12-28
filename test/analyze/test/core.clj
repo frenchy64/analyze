@@ -52,3 +52,22 @@
   (-> (a/analyze '{:ns {:name test.ns}} '(def a 1))
     :name)
   => 'test.ns/a)
+
+(facts "def name in correct namespace"
+  (-> (a/analyze '{:ns {:name test.ns}} 'Integer/SIZE)
+    :name)
+  => 'test.ns/a)
+
+;; special forms
+
+(facts "refer clojure.core :exclude"
+  (-> (a/analyze '{:ns {:name test.ns}} '(refer clojure.core :exclude [+]))
+    :excludes 
+    (get 'clojure.core))
+  => '[+])
+
+(facts "refer-clojure :exclude"
+  (-> (a/analyze '{:ns {:name test.ns}} '(refer-clojure :exclude ['+]))
+    :excludes 
+    (get 'clojure.core))
+  => '[+])

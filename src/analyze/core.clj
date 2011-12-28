@@ -157,7 +157,9 @@
 
 (declare analyze analyze-symbol analyze-seq)
 
-(def ^:dynamic *specials* '#{defmacro if def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . & quote})
+(def ^:dynamic *specials* '#{defmacro if def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . & quote letfn*
+                             clojure.core/import clojure.core/gen-class clojure.core/load clojure.core/use clojure.core/refer 
+                             clojure.core/require clojure.core/alias clojure.core/in-ns})
 
 (def ^:dynamic *recur-frames* nil)
 
@@ -363,6 +365,25 @@
      (assert targetexpr "set! target must be a field or a symbol naming a var")
      {:env env :op :set! :target targetexpr :val valexpr :children [targetexpr valexpr]})))
 
+(defmethod parse 'clojure.core/refer
+  [_ env [_ ns-sym & filters :as form] _]
+  (let [fs (apply hash-map filters)
+        {rename :rename exclude :exclude only :only} fs]
+    (doseq [[k v] fs]
+      (binding [*out* *err*]
+        (cond 
+          (and (= ns-sym 'clojure.core) 
+               (= k :exclude))
+          (swap! namespaces #(update-in % [(-> env :ns :name) :excludes] (fn [s] (set (concat s v)))))
+          :else (println "refer: unsupported option " ns-sym k))))
+    (merge {:op :refer :form form}
+           (when rename
+             {:renames {ns-sym rename}})
+           (when exclude
+             {:excludes {ns-sym exclude}})
+           (when only
+             {:onlys {ns-sym only}}))))
+
 (defmethod parse 'ns
   [_ env [_ name & args] _]
   (let [args (if (string? (first args))
@@ -462,6 +483,34 @@
          argexprs (vec (map #(analyze enve %) args))]
      {:env env :op :invoke :f fexpr :args argexprs :children (conj argexprs fexpr)})))
 
+(comment
+; Field/method:
+java.lang.Integer/SIZE
+(. java.lang.Integer SIZE)
+
+'{:op :dot
+  :target {:op :class
+           :info {:name java.lang.Integer}}
+  :field SIZE}
+
+
+; Aliased/qualified/unqualified Var
+clojure.core/+
+core/+
++
+
+'{:op :var
+  :info {:name clojure.core/+}}
+  
+; Aliased/qualified Class
+java.lang.Integer
+Integer
+  
+'{:op :class
+  :info {:name java.lang.Integer}}
+
+  )
+
 (defn analyze-symbol
   "Finds the var associated with sym"
   [env sym]
@@ -510,7 +559,7 @@
       (assert (not (nil? op)) "Can't call nil")
       (let [mform (macroexpand-1 env form)]
         (if (identical? form mform)
-          (if (*specials* op)
+          (if (*specials* op) ;;TODO qualify non-special forms
             (parse op env form name)
             (parse-invoke env form))
           (analyze env mform name))))))
@@ -591,7 +640,7 @@
   (require nssym) ;; require macroexpanders
   (reset-namespaces!)
   (with-core-clj [nssym]
-    (binding [*analyzer-ns* 'clojure.user]
+    (binding [*analyzer-ns* 'clojure.core]
       (let [file-name (-> (ns-publics nssym) first second meta :file) ;; TODO better way to get file name
             _ (assert file-name)
             res (.getResource (RT/baseLoader) file-name)
