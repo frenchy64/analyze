@@ -1,73 +1,87 @@
 (ns analyze.test.core
   (:require [analyze.core :as a])
-  (:use [midje.sweet]))
+  (:use [midje.sweet]
+        [clojure.test]))
 
-(def testenv '{:ns {:name test.ns
+(def testenv '{:top-level true
+               :ns {:name test.ns
                     :requires {core clojure.core}
                     :imports {Int java.lang.Integer}}})
 
-(facts "resolve aliased namespace"
-  (-> (a/analyze testenv 'core/foo)
-    :info :name)
-  => 'clojure.core/foo)
+;; Resolving vars and classes
 
-(facts "resolve aliased class"
-  (-> (a/analyze testenv 'Int)
-    :info :name)
-  => 'java.lang.Integer)
+(deftest resolve-aliased-namespace
+  (is (= (-> (a/analyze testenv 'core/foo)
+           :info :name)
+         'clojure.core/foo)))
 
-(facts "resolve aliased field"
-  (-> (a/analyze testenv 'Int/SIZE)
-    :info :name)
-  => 'java.lang.Integer/SIZE)
+(deftest resolve-aliased-class
+  (is (= (-> (a/analyze testenv 'Int)
+           :info :name)
+         'java.lang.Integer)))
 
-(facts "implicit java.lang import"
-  (-> (a/analyze testenv 'Integer)
-    :info :name)
-  => 'java.lang.Integer
+(deftest resolve-aliased-field
+  (is (= (-> (a/analyze testenv 'Int/SIZE)
+           :info :name)
+         'java.lang.Integer/SIZE)))
 
-  (-> (a/analyze testenv 'Exception)
-    :info :name)
-  => 'java.lang.Exception)
+(deftest implicit-javalang-import
+  (is 
+    (= (-> (a/analyze testenv 'Integer)
+         :info :name)
+       'java.lang.Integer))
 
-(facts "implicit clojure.core use"
-  (-> (a/analyze testenv '+)
-    :info :name)
-  => 'clojure.core/+)
+  (is
+    (= (-> (a/analyze testenv 'Exception)
+         :info :name)
+       'java.lang.Exception)))
 
-(facts "implicit clojure.core exclude"
-  (-> (a/analyze (-> testenv 
-                   (assoc-in [:ns :excludes] '#{+})
-                   (assoc-in [:ns :defs] '{+ +})) 
-                 '+)
-    :info :name)
-  => 'test.ns/+)
+(deftest implicit-clojurecore-use
+  (is 
+    (= (-> (a/analyze testenv '+)
+         :info :name)
+       'clojure.core/+)))
 
-(facts "implicit clojure.core shadowed"
-  (-> (a/analyze (assoc-in testenv [:locals] '{+ {:name +}}) '+)
-    :info :name)
-  => '+)
+(deftest implicit-clojurecore-exclude
+  (is 
+    (= (-> (a/analyze (-> testenv 
+                        (assoc-in [:ns :excludes] '#{+})
+                        (assoc-in [:ns :defs] '{+ +})) 
+                      '+)
+         :info :name)
+       'test.ns/+)))
 
-(facts "def name in correct namespace"
-  (-> (a/analyze '{:ns {:name test.ns}} '(def a 1))
-    :name)
-  => 'test.ns/a)
+(deftest implicit-clojurecore-shadowed
+  (is 
+    (= (-> (a/analyze (assoc-in testenv [:locals] '{+ {:name +}}) '+)
+         :info :name)
+       '+)))
 
-(facts "def name in correct namespace"
-  (-> (a/analyze '{:ns {:name test.ns}} 'Integer/SIZE)
-    :name)
-  => 'test.ns/a)
+(deftest def-name-in-correct-namespace
+  (is 
+    (= (-> (a/analyze '{:ns {:name test.ns}} '(def a 1))
+         :name)
+       'test.ns/a))
+
+  (is 
+    (= (-> (a/analyze '{:ns {:name test.ns}} 'Integer/SIZE)
+         :name)
+       'test.ns/a)))
 
 ;; special forms
 
-(facts "refer clojure.core :exclude"
-  (-> (a/analyze '{:ns {:name test.ns}} '(refer clojure.core :exclude [+]))
-    :excludes 
-    (get 'clojure.core))
-  => '[+])
+(def referenv {:ns {:name test.ns} :top-level true})
 
-(facts "refer-clojure :exclude"
-  (-> (a/analyze '{:ns {:name test.ns}} '(refer-clojure :exclude ['+]))
-    :excludes 
-    (get 'clojure.core))
-  => '[+])
+(deftest refer-clojurecore-exclude
+  (is 
+    (= (-> (a/analyze referenv '(refer clojure.core :exclude [+]))
+         :excludes 
+         (get 'clojure.core))
+       '[+])))
+
+(deftest refer-clojure-exclude
+  (is
+    (= (-> (a/analyze referenv '(refer-clojure :exclude ['+]))
+         :excludes 
+         (get 'clojure.core))
+       '[+])))

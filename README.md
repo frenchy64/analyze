@@ -13,6 +13,28 @@ This is a port of the ClojureScript analyzer, a ClojureScript compilation phase.
 ** callable at any time
 *** some cases impossible to statically predict aliases, which classes are loaded
 **** should emit warning in those cases
+*** should use global atoms/vars to keep track of defs/imports/aliases
+**** any static namespace description would quickly become out of date
+
+(do 
+  (in-ns 'my-ns)
+  (require '[clojure.core :as core])  ;; should check current namespace via *analyzer-ns*
+  (use '[clojure.repl :only [source]])) ;; should check current requires via `namespaces` atom
+
+* Need to distinguish between forms in fn body and forms not in fn body
+
+(def mynum 1)
+
+mynum ;; need to know this refers to the above definition
+;=> 1
+
+(defn myfn []
+  mynum) ;; need to know this looks up the current value of mynum
+
+(def mynum 2)
+
+(myfn)
+;=> 2
 
 # Usage
 

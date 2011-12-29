@@ -13,8 +13,13 @@
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
            (clojure.lang RT))
   (:require [clojure.java.io :as io]
+            [clojure.core :as core]
             [clojure.pprint :as pprint]
             [clojure.string :as string]))
+
+(defn warn [& args]
+  (binding [*out* *err*]
+    (apply println "WARNING:" args)))
 
 (def initial-namespaces '{clojure.core {:name clojure.core}
                           clojure.user {:name clojure.user}})
@@ -157,9 +162,11 @@
 
 (declare analyze analyze-symbol analyze-seq)
 
-(def ^:dynamic *specials* '#{defmacro if def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . & quote letfn*
-                             clojure.core/import clojure.core/gen-class clojure.core/load clojure.core/use clojure.core/refer 
-                             clojure.core/require clojure.core/alias clojure.core/in-ns})
+(def ^:dynamic *specials* '#{if def fn* do let* loop* throw try* recur new set!  deftype* defrecord* . & quote letfn*
+                             core/ns core/defmacro core/gen-class core/load core/use core/refer core/require core/alias core/in-ns core/compile
+                             import* reify* monitor-enter monitor-exit 
+                             ;; TODO
+                             #_var #_case* #_finally})
 
 (def ^:dynamic *recur-frames* nil)
 
@@ -178,7 +185,7 @@
 
 (defmulti parse (fn [op & rest] op))
 
-(defmethod parse 'defmacro
+(defmethod parse 'core/defmacro
   [op env form name]
   {:env env :op :defmacro :form form})
 
@@ -365,24 +372,88 @@
      (assert targetexpr "set! target must be a field or a symbol naming a var")
      {:env env :op :set! :target targetexpr :val valexpr :children [targetexpr valexpr]})))
 
-(defmethod parse 'clojure.core/refer
+(defmethod parse 'reify*
+  [_ env [_ interfaces & methods :as form] _]
+  {:op :reify*
+   :interfaces interfaces
+   :methods methods
+   :form form
+   :env env})
+
+(defmethod parse 'monitor-enter
+  [_ env [_ x :as form] _]
+  {:op :monitor-enter :form form :env env})
+
+(defmethod parse 'monitor-exit
+  [_ env [_ x :as form] _]
+  {:op :monitor-exit :form form :env env})
+
+(defmethod parse 'case*
+  [_ env [_ & args :as form] _]
+  (warn "case* not implemented")
+  {:op :case* :form form :env env})
+
+(defmethod parse 'import*
+  [_ env [_ lib-str :as form] _]
+  (warn "import* outside ns form")
+  {:op :import* :lib lib-str :form form :env env})
+
+(defmethod parse 'core/gen-class
+  [_ env [_ & options :as form] _]
+  (warn "gen-class outside ns form")
+  {:op :core/gen-class :form form :env env})
+
+(defmethod parse 'core/load
+  [_ env [_ & paths :as form] _]
+  (warn "load outside ns form")
+  {:op :core/load :form form :env env})
+
+(defmethod parse 'core/use
+  [_ env [_ & paths :as form] _]
+  (warn "use outside ns form")
+  {:op :core/use :form form :env env})
+
+(defmethod parse 'core/refer
   [_ env [_ ns-sym & filters :as form] _]
   (let [fs (apply hash-map filters)
         {rename :rename exclude :exclude only :only} fs]
+    (warn "refer outside ns form")
+    (comment
     (doseq [[k v] fs]
       (binding [*out* *err*]
         (cond 
           (and (= ns-sym 'clojure.core) 
                (= k :exclude))
           (swap! namespaces #(update-in % [(-> env :ns :name) :excludes] (fn [s] (set (concat s v)))))
-          :else (println "refer: unsupported option " ns-sym k))))
-    (merge {:op :refer :form form}
+          :else (println "refer: unsupported option " ns-sym k)))))
+    (merge {:op :core/refer :form form :env env}
            (when rename
              {:renames {ns-sym rename}})
            (when exclude
              {:excludes {ns-sym exclude}})
            (when only
              {:onlys {ns-sym only}}))))
+
+(defmethod parse 'core/require
+  [_ env [_ & args :as form] _]
+  (when (not (-> env :top-level))
+    (warn "non top level require"))
+  {:op :core/require :form form :env env})
+
+(defmethod parse 'core/alias
+  [_ env [_ alias-sym ns-sym :as form] _]
+  (warn "alias outside ns form")
+  {:op :core/alias :form form :env env})
+
+(defmethod parse 'core/in-ns
+  [_ env [_ & args :as form] _]
+  (warn "in-ns outside ns form")
+  {:op :core/in-ns :form form :env env})
+
+(defmethod parse 'core/compile
+  [_ env [_ lib :as form] _]
+  (warn "compile found")
+  {:op :core/compile :lib lib :form form :env env})
 
 (defmethod parse 'ns
   [_ env [_ name & args] _]
@@ -447,6 +518,11 @@
                            (assoc-in [name :uses] uses)
                            (assoc-in [name :requires] requires)))
     {:env env :op :ns :name name :uses uses :requires requires :excludes excludes}))
+
+(defmethod parse 'letfn*
+  [_ env [_ & args :as form] _]
+  (warn "letfn* not implemented")
+  {:op :letfn* :form form :env env})
 
 (defmethod parse 'deftype*
   [_ env [_ tsym fields] _]
@@ -648,7 +724,7 @@ Integer
             strm (.getResourceAsStream (RT/baseLoader) file-name)]
         (with-open [rdr (PushbackReader. (InputStreamReader. strm))]
           (doall
-            (map #(let [env {:ns (@namespaces *analyzer-ns*) :context :statement :locals {}}]
+            (map #(let [env {:ns (@namespaces *analyzer-ns*) :top-level true :context :statement :locals {}}]
                     (analyze env %))
                  (forms-seq nil rdr))))))))
 
