@@ -17,7 +17,7 @@
                          Compiler$MonitorExitExpr Compiler$ThrowExpr Compiler$InvokeExpr Compiler$TheVarExpr Compiler$VarExpr
                          Compiler$UnresolvedVarExpr Compiler$ObjExpr Compiler$NewInstanceMethod Compiler$FnMethod Compiler$FnExpr
                          Compiler$NewInstanceExpr Compiler$MetaExpr Compiler$BodyExpr Compiler$ImportExpr Compiler$AssignExpr
-                         Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C))
+                         Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
             [clojure.repl :as repl]))
@@ -37,7 +37,7 @@
       :field
       (wall-hack-field class-name member-name (first args)))))
 
-(defmulti Expr->map (fn [& args] (-> args first class)))
+(defmulti Expr->map (fn Expr->map [& args] (-> args first class)))
 
 ;; def
 
@@ -87,6 +87,16 @@
    :env env
    :body (Expr->map (.body expr))
    :binding-inits (map BindingInit->vec (.bindingInits expr))})
+
+;; LocalBindingExpr
+
+(defmethod Expr->map Compiler$LocalBindingExpr
+  [^Compiler$LocalBindingExpr expr env]
+  {:op :local-binding-expr
+   :env env
+   :local-binding (LocalBinding->map (.b expr) env)
+   :tag (.tag expr)
+   :Expr-obj expr})
 
 ;; Methods
 
@@ -140,15 +150,12 @@
 
 (defmethod Expr->map Compiler$NewExpr
   [^Compiler$NewExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$NewExpr]
-              (wall-hack :field cobj nm expr)))]
-    {:op :new 
-     :env env
-     :ctor (@#'reflect/constructor->map (field 'ctor expr))
-     :class (field 'c expr)
-     :args (map Expr->map (field 'args expr) (repeat env))
-     :Expr-obj expr}))
+  {:op :new 
+   :env env
+   :ctor (@#'reflect/constructor->map (.ctor expr))
+   :class (.c expr)
+   :args (map Expr->map (.args expr) (repeat env))
+   :Expr-obj expr})
 
 ;; Literals
 
@@ -207,7 +214,7 @@
               (wall-hack :field cobj nm expr)))]
     {:op :throw
      :env env
-     :target (Expr->map (field 'excExpr expr) env)
+     :exception (Expr->map (field 'excExpr expr) env)
      :Expr-obj expr}))
 
 ;; Invokes
@@ -372,7 +379,8 @@
   {:op :try
    :env env
    :try-expr (Expr->map (.tryExpr expr) env)
-   :finally-expr (Expr->map (.finallyExpr expr) env)
+   :finally-expr (when-let [finally-expr (.finallyExpr expr)]
+                   (Expr->map finally-expr env))
    :catch-exprs (map CatchClause->map (.catchExprs expr) (repeat env))
    :ret-local (.retLocal expr)
    :finally-local (.finallyLocal expr)})
@@ -420,6 +428,7 @@
 
 (comment
 (analyze {:ns {:name 'clojure.core} :context :eval} '(try (throw (Exception.)) (catch Exception e (throw e)) (finally 33)))
+(analyze {:ns {:name 'clojure.core} :context :eval} '(try ))
 
 ;; Expecting more output from things like :fn-method
 (analyze {:ns {:name 'clojure.core} :context :eval} '(try (println 1 23) (throw (Exception.)) (catch Exception e (throw e)) ))
