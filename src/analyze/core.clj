@@ -36,6 +36,8 @@
 
 (defmulti Expr->map class)
 
+;; def
+
 (defmethod Expr->map clojure.lang.Compiler$DefExpr
   [^clojure.lang.Compiler$DefExpr expr]
   (letfn [(field [nm expr]
@@ -51,13 +53,16 @@
      :is-dynamic (field 'isDynamic expr)
      :Expr-obj expr}))
 
+;; let
+
 (defn LocalBinding->map [^clojure.lang.Compiler$LocalBinding lb]
   (letfn [(field ([nm expr] (field nm expr clojure.lang.Compiler$LocalBinding))
                  ([nm expr cobj] (wall-hack :field cobj nm expr)))]
     {:op :local-binding
      :sym (field 'sym lb)
      :tag (field 'tag lb)
-     :init (Expr->map (field 'init lb))}))
+     :init (when-let [init (field 'init lb)]
+             (Expr->map init))}))
 
 (defn BindingInit->vec [^clojure.lang.Compiler$BindingInit bi]
   (letfn [(field ([nm expr] (field nm expr clojure.lang.Compiler$BindingInit))
@@ -76,6 +81,17 @@
      :bindings (map BindingInit->vec (field 'bindingInits expr))
      :body (Expr->map (field 'body expr))
      :Expr-obj expr}))
+
+;; letfn
+
+(defmethod Expr->map clojure.lang.Compiler$LetFnExpr
+  [^clojure.lang.Compiler$LetFnExpr expr]
+  (letfn [(field 
+            ([nm expr] (field nm expr clojure.lang.Compiler$LetFnExpr))
+            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
+    {:op :letfn
+     :body (Expr->map (field 'body expr))
+     :binding-inits (map BindingInit->vec (field 'bindingInits expr))}))
 
 ;; Methods
 
@@ -268,10 +284,17 @@
 
 (defmethod ObjMethod->map clojure.lang.Compiler$FnMethod 
   [^clojure.lang.Compiler$FnMethod obm]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$FnMethod]
-              (wall-hack :field cobj nm expr)))]
+  (letfn [(field 
+            ([nm expr] (field nm expr clojure.lang.Compiler$FnMethod))
+            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
     {:op :fn-method
+     :objx (field 'objx obm clojure.lang.Compiler$ObjMethod)
+     :parent (field 'parent obm clojure.lang.Compiler$ObjMethod)
+     :required-params (map LocalBinding->map (field 'reqParms obm))
+     :rest-param (let [rest-param (field 'restParm obm)]
+                   (if rest-param
+                     (LocalBinding->map rest-param)
+                     rest-param))
      :ObjMethod-obj obm}))
 
 (defmethod Expr->map clojure.lang.Compiler$FnExpr
@@ -279,7 +302,7 @@
   (letfn [(field 
             ([nm expr] (field nm expr clojure.lang.Compiler$FnExpr))
             ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :obj-expr
+    {:op :fn-expr
      :methods (map ObjMethod->map (field 'methods expr))
      :tag (field 'tag expr clojure.lang.Compiler$ObjExpr)
      :Expr-obj expr}))
@@ -306,6 +329,17 @@
     {:op :import
      :class-str (field 'c expr)
      :Expr-obj expr}))
+
+;; AssignExpr (set!)
+
+(defmethod Expr->map clojure.lang.Compiler$AssignExpr
+  [^clojure.lang.Compiler$AssignExpr expr]
+  (letfn [(field [nm expr]
+            (let [cobj clojure.lang.Compiler$AssignExpr]
+              (wall-hack :field cobj nm expr)))]
+    {:op :set!
+     :target (Expr->map (field 'target expr))
+     :val (Expr->map (field 'val expr))}))
 
 ;; TryExpr
 
