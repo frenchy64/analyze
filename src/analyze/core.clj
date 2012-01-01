@@ -17,7 +17,7 @@
                          Compiler$MonitorExitExpr Compiler$ThrowExpr Compiler$InvokeExpr Compiler$TheVarExpr Compiler$VarExpr
                          Compiler$UnresolvedVarExpr Compiler$ObjExpr Compiler$NewInstanceMethod Compiler$FnMethod Compiler$FnExpr
                          Compiler$NewInstanceExpr Compiler$MetaExpr Compiler$BodyExpr Compiler$ImportExpr Compiler$AssignExpr
-                         Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr))
+                         Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr Compiler$RecurExpr))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
             [clojure.repl :as repl]))
@@ -383,7 +383,18 @@
                    (Expr->map finally-expr env))
    :catch-exprs (map CatchClause->map (.catchExprs expr) (repeat env))
    :ret-local (.retLocal expr)
-   :finally-local (.finallyLocal expr)})
+   :finally-local (.finallyLocal expr)
+   :Expr-obj expr})
+
+;; RecurExpr
+
+(defmethod Expr->map Compiler$RecurExpr
+  [^Compiler$RecurExpr expr env]
+  {:op :recur
+   :env env ;TODO line, source
+   :args (map Expr->map (.args expr) (repeat env))
+   :loop-locals (map Expr->map (.loopLocals expr) (repeat env))
+   :Expr-obj expr})
 
 (defmethod Expr->map :default
   [expr]
