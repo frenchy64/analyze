@@ -1,23 +1,38 @@
-(ns analyze.port)
+(ns analyze.port
+  (:require [clojure.reflect :as reflect]
+            [clojure.java.io :as io]
+            [clojure.string :as string])
+  (:import [java.security PrivilegedAction AccessController]
+           [clojure.lang RT]))
+
+(defonce namespaces (atom {}))
+
+
+(defn current-reflector []
+  (reflect/->JavaReflector (.getContextClassLoader (Thread/currentThread))))
 
 ;; port of `analyze` method, line 6213, clojure.lang.RT
 
+(defn maybe-class [refl sym]
+  (try
+    (do-reflect refl sym)
+    (catch Exception e)))
+
+(comment
 (defn analyze-symbol
   "Finds the var associated with sym"
   [env sym]
-  (if (not (namespace sym))
-    (when-let [nm (-> env :locals sym)]
-      {:op :local :info {:name nm}})
-    (
-
-
-    ;; otherwise if (namespace sym) is a 
   (let [ret {:env env :form sym}
         lb (-> env :locals sym)]
-    (if lb
-      (assoc ret :op :var :info lb)
-      (assoc ret :op :var :info (resolve-existing-var env sym)))))
+    (if lb 
+      (assoc ret :op :local :info lb)
+      (if-let [reflclass (and (not (namespace sym))
+                              (maybe-class (current-reflector) form))]
+        (assoc ret {:op :class :class reflclass})
 
+      (assoc ret :op :var :info (resolve-existing-var env sym)))))
+)
+  )
 
 (defn analyze
   "Given an environment, a map containing {:locals (mapping of names to bindings), :context
@@ -38,3 +53,25 @@
         (vector? form) (analyze-vector env form name)
         (set? form) (analyze-set env form name)
         :else {:op :constant :env env :form form}))))
+
+
+(defn forms-seq
+  "Seq of forms in a Clojure or ClojureScript file."
+  ([f]
+     (forms-seq f (java.io.PushbackReader. (io/reader f))))
+  ([f ^java.io.PushbackReader rdr]
+     (if-let [form (read rdr nil nil)]
+       (lazy-seq (cons form (forms-seq f rdr)))
+       (.close rdr))))
+
+(defn load-path [source-path]
+  (binding [*analyzer-ns* 'clojure.core]
+    (let [res (.getResource (RT/baseLoader) file-name)
+          _ (assert res) 
+          strm (.getResourceAsStream (RT/baseLoader) file-name)]
+      (with-open [rdr (PushbackReader. (InputStreamReader. strm))]
+        (doall
+          (map #(let [env {:ns (@namespaces *analyzer-ns*) :context :statement :locals {} :bindings {::warn-on-reflection true
+                                                                                                     ::unchecked-math false}}]
+                  (analyze env %))
+               (forms-seq nil rdr)))))))
