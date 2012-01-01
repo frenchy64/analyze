@@ -11,13 +11,16 @@
 (ns analyze.core
   (:refer-clojure :exclude [munge macroexpand-1])
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
-           (clojure.lang RT Compiler))
+           (clojure.lang Compiler$DefExpr Compiler$LocalBinding Compiler$BindingInit Compiler$LetExpr
+                         Compiler$LetFnExpr Compiler$StaticMethodExpr Compiler$InstanceMethodExpr Compiler$StaticFieldExpr
+                         Compiler$NewExpr Compiler$LiteralExpr Compiler$EmptyExpr Compiler$VectorExpr Compiler$MonitorEnterExpr
+                         Compiler$MonitorExitExpr Compiler$ThrowExpr Compiler$InvokeExpr Compiler$TheVarExpr Compiler$VarExpr
+                         Compiler$UnresolvedVarExpr Compiler$ObjExpr Compiler$NewInstanceMethod Compiler$FnMethod Compiler$FnExpr
+                         Compiler$NewInstanceExpr Compiler$MetaExpr Compiler$BodyExpr Compiler$ImportExpr Compiler$AssignExpr
+                         Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
-            [clojure.core :as core]
-            [clojure.repl :as repl]
-            [clojure.pprint :as pprint]
-            [clojure.string :as string]))
+            [clojure.repl :as repl]))
 
 (defn wall-hack [what class-name member-name & args]
   (letfn [(wall-hack-field [class-name field-name obj]
@@ -38,10 +41,10 @@
 
 ;; def
 
-(defmethod Expr->map clojure.lang.Compiler$DefExpr
-  [^clojure.lang.Compiler$DefExpr expr env]
+(defmethod Expr->map Compiler$DefExpr
+  [^Compiler$DefExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$DefExpr]
+            (let [cobj Compiler$DefExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :def
      :env (assoc env 
@@ -56,53 +59,41 @@
 
 ;; let
 
-(defn LocalBinding->map [^clojure.lang.Compiler$LocalBinding lb env]
-  (letfn [(field ([nm expr] (field nm expr clojure.lang.Compiler$LocalBinding))
-                 ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :local-binding
-     :env env
-     :sym (field 'sym lb)
-     :tag (field 'tag lb)
-     :init (when-let [init (field 'init lb)]
-             (Expr->map init env))}))
+(defn LocalBinding->map [^Compiler$LocalBinding lb env]
+  {:op :local-binding
+   :env env
+   :sym (.sym lb)
+   :tag (.tag lb)
+   :init (when-let [init (.init lb)]
+           (Expr->map init env))})
 
-(defn BindingInit->vec [^clojure.lang.Compiler$BindingInit bi env]
-  (letfn [(field ([nm expr] (field nm expr clojure.lang.Compiler$BindingInit))
-                 ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    [(-> (field 'localBinding bi) (LocalBinding->map env))
-     (-> (field 'init bi) (Expr->map env))]))
+(defn BindingInit->vec [^Compiler$BindingInit bi env]
+  [(LocalBinding->map (.binding bi) env)
+   (Expr->map (.init bi) env)])
 
-(defmethod Expr->map clojure.lang.Compiler$LetExpr
-  [^clojure.lang.Compiler$LetExpr expr env]
-  (letfn [(field 
-            ([nm expr] (field nm expr clojure.lang.Compiler$LetExpr))
-            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :let
-     :env (assoc env
-                 :source (field 'source expr)
-                 :line (field 'line expr))
-     :bindings (map BindingInit->vec (field 'bindingInits expr))
-     :body (Expr->map (field 'body expr))
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$LetExpr
+  [^Compiler$LetExpr expr env]
+  {:op :let
+   :env env
+   :bindings (map BindingInit->vec (.bindingInits expr) (repeat env))
+   :body (Expr->map (.body expr) env)
+   :Expr-obj expr})
 
 ;; letfn
 
-(defmethod Expr->map clojure.lang.Compiler$LetFnExpr
-  [^clojure.lang.Compiler$LetFnExpr expr env]
-  (letfn [(field 
-            ([nm expr] (field nm expr clojure.lang.Compiler$LetFnExpr))
-            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :letfn
-     :env env
-     :body (Expr->map (field 'body expr))
-     :binding-inits (map BindingInit->vec (field 'bindingInits expr))}))
+(defmethod Expr->map Compiler$LetFnExpr
+  [^Compiler$LetFnExpr expr env]
+  {:op :letfn
+   :env env
+   :body (Expr->map (.body expr))
+   :binding-inits (map BindingInit->vec (.bindingInits expr))})
 
 ;; Methods
 
-(defmethod Expr->map clojure.lang.Compiler$StaticMethodExpr
-  [^clojure.lang.Compiler$StaticMethodExpr expr env]
+(defmethod Expr->map Compiler$StaticMethodExpr
+  [^Compiler$StaticMethodExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$StaticMethodExpr]
+            (let [cobj Compiler$StaticMethodExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :static-method 
      :env (assoc env
@@ -115,10 +106,10 @@
      :tag (field 'tag expr)
      :Expr-obj expr}))
 
-(defmethod Expr->map clojure.lang.Compiler$InstanceMethodExpr
-  [^clojure.lang.Compiler$InstanceMethodExpr expr env]
+(defmethod Expr->map Compiler$InstanceMethodExpr
+  [^Compiler$InstanceMethodExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$InstanceMethodExpr]
+            (let [cobj Compiler$InstanceMethodExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :instance-method 
      :env (assoc env
@@ -133,10 +124,10 @@
 
 ;; Fields
 
-(defmethod Expr->map clojure.lang.Compiler$StaticFieldExpr
-  [^clojure.lang.Compiler$StaticFieldExpr expr env]
+(defmethod Expr->map Compiler$StaticFieldExpr
+  [^Compiler$StaticFieldExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$StaticFieldExpr]
+            (let [cobj Compiler$StaticFieldExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :static-field
      :env (assoc env
@@ -147,10 +138,10 @@
      :tag (field 'tag expr)
      :Expr-obj expr}))
 
-(defmethod Expr->map clojure.lang.Compiler$NewExpr
-  [^clojure.lang.Compiler$NewExpr expr env]
+(defmethod Expr->map Compiler$NewExpr
+  [^Compiler$NewExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$NewExpr]
+            (let [cobj Compiler$NewExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :new 
      :env env
@@ -161,67 +152,58 @@
 
 ;; Literals
 
-(defmethod Expr->map clojure.lang.Compiler$LiteralExpr
-  [^clojure.lang.Compiler$LiteralExpr expr env]
+(defmethod Expr->map Compiler$LiteralExpr
+  [^Compiler$LiteralExpr expr env]
   (letfn [(method [nm expr typ]
-            (let [cobj clojure.lang.Compiler$LiteralExpr]
-              (wall-hack :method cobj nm typ expr)))
-          (field [nm expr]
-            (let [cobj clojure.lang.Compiler$LiteralExpr]
-              (wall-hack :field cobj nm expr)))]
+            (let [cobj Compiler$LiteralExpr]
+              (wall-hack :method cobj nm typ expr)))]
     {:op :literal
      :env env
      :val (method 'val expr [])
      :Expr-obj expr}))
 
-(defmethod Expr->map clojure.lang.Compiler$EmptyExpr
-  [^clojure.lang.Compiler$EmptyExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$EmptyExpr]
-              (wall-hack :field cobj nm expr)))]
-    {:op :empty-expr
-     :env env
-     :coll (field 'coll expr)
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$EmptyExpr
+  [^Compiler$EmptyExpr expr env]
+  {:op :empty-expr
+   :env env
+   :coll (.coll expr)
+   :Expr-obj expr})
 
 ;; vector literal
 
-(defmethod Expr->map clojure.lang.Compiler$VectorExpr
-  [^clojure.lang.Compiler$VectorExpr expr env]
-  (letfn [(field 
-            ([nm expr] (field nm expr clojure.lang.Compiler$VectorExpr))
-            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :vector
-     :env env
-     :args (map Expr->map (field 'args expr) (repeat env))
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$VectorExpr
+  [^Compiler$VectorExpr expr env]
+  {:op :vector
+   :env env
+   :args (map Expr->map (.args expr) (repeat env))
+   :Expr-obj expr})
 
 ;; Untyped
 
-(defmethod Expr->map clojure.lang.Compiler$MonitorEnterExpr
-  [^clojure.lang.Compiler$MonitorEnterExpr expr env]
+(defmethod Expr->map Compiler$MonitorEnterExpr
+  [^Compiler$MonitorEnterExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$MonitorEnterExpr]
+            (let [cobj Compiler$MonitorEnterExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :monitor-enter
      :env env
      :target (Expr->map (field 'target expr) env)
      :Expr-obj expr}))
 
-(defmethod Expr->map clojure.lang.Compiler$MonitorExitExpr
-  [^clojure.lang.Compiler$MonitorExitExpr expr env]
+(defmethod Expr->map Compiler$MonitorExitExpr
+  [^Compiler$MonitorExitExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$MonitorExitExpr]
+            (let [cobj Compiler$MonitorExitExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :monitor-exit
      :env env
      :target (Expr->map (field 'target expr) env)
      :Expr-obj expr}))
 
-(defmethod Expr->map clojure.lang.Compiler$ThrowExpr
-  [^clojure.lang.Compiler$ThrowExpr expr env]
+(defmethod Expr->map Compiler$ThrowExpr
+  [^Compiler$ThrowExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$ThrowExpr]
+            (let [cobj Compiler$ThrowExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :throw
      :env env
@@ -230,10 +212,10 @@
 
 ;; Invokes
 
-(defmethod Expr->map clojure.lang.Compiler$InvokeExpr
-  [^clojure.lang.Compiler$InvokeExpr expr env]
+(defmethod Expr->map Compiler$InvokeExpr
+  [^Compiler$InvokeExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$InvokeExpr]
+            (let [cobj Compiler$InvokeExpr]
               (wall-hack :field cobj nm expr)))]
     (merge
       {:op :invoke
@@ -253,35 +235,29 @@
 
 ;; TheVarExpr
 
-(defmethod Expr->map clojure.lang.Compiler$TheVarExpr
-  [^clojure.lang.Compiler$TheVarExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$TheVarExpr]
-              (wall-hack :field cobj nm expr)))]
-    {:op :the-var
-     :env env
-     :var (field 'var expr)
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$TheVarExpr
+  [^Compiler$TheVarExpr expr env]
+  {:op :the-var
+   :env env
+   :var (.var expr)
+   :Expr-obj expr})
 
 ;; VarExpr
 
-(defmethod Expr->map clojure.lang.Compiler$VarExpr
-  [^clojure.lang.Compiler$VarExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$VarExpr]
-              (wall-hack :field cobj nm expr)))]
-    {:op :var
-     :env env
-     :var (field 'var expr)
-     :tag (field 'tag expr)
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$VarExpr
+  [^Compiler$VarExpr expr env]
+  {:op :var
+   :env env
+   :var (.var expr)
+   :tag (.tag expr)
+   :Expr-obj expr})
 
 ;; UnresolvedVarExpr
 
-(defmethod Expr->map clojure.lang.Compiler$UnresolvedVarExpr
-  [^clojure.lang.Compiler$UnresolvedVarExpr expr env]
+(defmethod Expr->map Compiler$UnresolvedVarExpr
+  [^Compiler$UnresolvedVarExpr expr env]
   (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$UnresolvedVarExpr]
+            (let [cobj Compiler$UnresolvedVarExpr]
               (wall-hack :field cobj nm expr)))]
     {:op :unresolved-var
      :env env
@@ -290,144 +266,116 @@
 
 ;; ObjExprs
 
-(defmethod Expr->map clojure.lang.Compiler$ObjExpr
-  [^clojure.lang.Compiler$ObjExpr expr env]
-  (letfn [(field 
-            ([nm expr] (field nm expr clojure.lang.Compiler$ObjExpr))
-            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :obj-expr
-     :env env
-     :tag (field 'tag expr)
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$ObjExpr
+  [^Compiler$ObjExpr expr env]
+  {:op :obj-expr
+   :env env
+   :tag (.tag expr)
+   :Expr-obj expr})
 
 ;; FnExpr (extends ObjExpr)
 
 (defmulti ObjMethod->map (fn [& args] (-> args first class)))
 
-(defmethod ObjMethod->map clojure.lang.Compiler$NewInstanceMethod 
-  [^clojure.lang.Compiler$NewInstanceMethod obm env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$NewInstanceMethod]
-              (wall-hack :field cobj nm expr)))]
-    {:op :new-instance-method
-     :env env
-     :ObjMethod-obj obm}))
+(defmethod ObjMethod->map Compiler$NewInstanceMethod 
+  [^Compiler$NewInstanceMethod obm env]
+  {:op :new-instance-method
+   :env env
+   :body (Expr->map (.body obm) env)
+   :ObjMethod-obj obm})
 
-(defmethod ObjMethod->map clojure.lang.Compiler$FnMethod 
-  [^clojure.lang.Compiler$FnMethod obm env]
-  (letfn [(field 
-            ([nm expr] (field nm expr clojure.lang.Compiler$FnMethod))
-            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :fn-method
-     :env env
-     :objx (field 'objx obm clojure.lang.Compiler$ObjMethod)
-     :parent (field 'parent obm clojure.lang.Compiler$ObjMethod)
-     :required-params (map LocalBinding->map (field 'reqParms obm) (repeat env))
-     :rest-param (let [rest-param (field 'restParm obm)]
-                   (if rest-param
-                     (LocalBinding->map rest-param env)
-                     rest-param))
-     :ObjMethod-obj obm}))
+(defmethod ObjMethod->map Compiler$FnMethod 
+  [^Compiler$FnMethod obm env]
+  {:op :fn-method
+   :env env
+   :body (Expr->map (.body obm) env)
+   :locals (.locals obm)
+   :required-params (map LocalBinding->map (.reqParms obm) (repeat env))
+   :rest-param (let [rest-param (.restParm obm)]
+                 (if rest-param
+                   (LocalBinding->map rest-param env)
+                   rest-param))
+   :ObjMethod-obj obm})
 
-(defmethod Expr->map clojure.lang.Compiler$FnExpr
-  [^clojure.lang.Compiler$FnExpr expr env]
-  (letfn [(field 
-            ([nm expr] (field nm expr clojure.lang.Compiler$FnExpr))
-            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :fn-expr
-     :env env
-     :methods (map ObjMethod->map (field 'methods expr) (repeat env))
-     :tag (field 'tag expr clojure.lang.Compiler$ObjExpr)
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$FnExpr
+  [^Compiler$FnExpr expr env]
+  {:op :fn-expr
+   :env env
+   :methods (map ObjMethod->map (.methods expr) (repeat env))
+   :variadic-method (when-let [variadic-method (.variadicMethod expr)]
+                      (ObjMethod->map variadic-method env))
+   :tag (.tag expr)
+   :Expr-obj expr})
 
-(defmethod Expr->map clojure.lang.Compiler$NewInstanceExpr
-  [^clojure.lang.Compiler$NewInstanceExpr expr env]
-  (letfn [(field 
-            ([nm expr] (field nm expr clojure.lang.Compiler$NewInstanceExpr))
-            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :new-instance-expr
-     :env env
-     :methods (map ObjMethod->map (field 'methods expr) (repeat env))
-     :mmap (field 'mmap expr)
-     :covariants (field 'covariants expr)
-     :tag (field 'tag expr clojure.lang.Compiler$ObjExpr)
-     :Expr-obj expr}))
+;; NewInstanceExpr
+
+(defmethod Expr->map Compiler$NewInstanceExpr
+  [^Compiler$NewInstanceExpr expr env]
+  {:op :new-instance-expr
+   :env env
+   :methods (map ObjMethod->map (.methods expr) (repeat env))
+   :mmap (.mmap expr)
+   :covariants (.covariants expr)
+   :tag (.tag expr)
+   :Expr-obj expr})
 
 ;; MetaExpr
 
-(defmethod Expr->map clojure.lang.Compiler$MetaExpr
-  [^clojure.lang.Compiler$MetaExpr expr env]
-  (letfn [(field 
-            ([nm expr] (field nm expr clojure.lang.Compiler$MetaExpr))
-            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
-    {:op :meta
-     :env env
-     :expr (Expr->map (field 'expr expr) env)
-     :meta (Expr->map (field 'meta expr) env)
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$MetaExpr
+  [^Compiler$MetaExpr expr env]
+  {:op :meta
+   :env env
+   :expr (Expr->map (.expr expr) env)
+   :meta (Expr->map (.meta expr) env)
+   :Expr-obj expr})
 
 ;; do
 
-(defmethod Expr->map clojure.lang.Compiler$BodyExpr
-  [^clojure.lang.Compiler$BodyExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$BodyExpr]
-              (wall-hack :field cobj nm expr)))]
-    {:op :do
-     :env env
-     :exprs (map Expr->map (field 'exprs expr) (repeat env))
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$BodyExpr
+  [^Compiler$BodyExpr expr env]
+  {:op :do
+   :env env
+   :exprs (map Expr->map (.exprs expr) (repeat env))
+   :Expr-obj expr})
 
 ;; ImportExpr
 
-(defmethod Expr->map clojure.lang.Compiler$ImportExpr
-  [^clojure.lang.Compiler$ImportExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$ImportExpr]
-              (wall-hack :field cobj nm expr)))]
-    {:op :import
-     :env env
-     :class-str (field 'c expr)
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$ImportExpr
+  [^Compiler$ImportExpr expr env]
+  {:op :import
+   :env env
+   :class-str (.c expr)
+   :Expr-obj expr})
 
 ;; AssignExpr (set!)
 
-(defmethod Expr->map clojure.lang.Compiler$AssignExpr
-  [^clojure.lang.Compiler$AssignExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$AssignExpr]
-              (wall-hack :field cobj nm expr)))]
-    {:op :set!
-     :env env
-     :target (Expr->map (field 'target expr) env)
-     :val (Expr->map (field 'val expr) env)
-     :Expr-obj expr}))
+(defmethod Expr->map Compiler$AssignExpr
+  [^Compiler$AssignExpr expr env]
+  {:op :set!
+   :env env
+   :target (Expr->map (.target expr) env)
+   :val (Expr->map (.val expr) env)
+   :Expr-obj expr})
 
 ;; TryExpr
 
-(defn CatchClause->map [^clojure.lang.Compiler$TryExpr$CatchClause ctch env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$TryExpr$CatchClause]
-              (wall-hack :field cobj nm expr)))]
-    {:op :catch
-     :env env
-     :class (field 'class ctch)
-     :local-binding (LocalBinding->map (field 'localBinding ctch) env)
-     :handler (Expr->map (field 'handler ctch) env)
-     :CatchClause-obj ctch}))
+(defn CatchClause->map [^Compiler$TryExpr$CatchClause ctch env]
+  {:op :catch
+   :env env
+   :class (.c ctch)
+   :local-binding (LocalBinding->map (.lb ctch) env)
+   :handler (Expr->map (.handler ctch) env)
+   :CatchClause-obj ctch})
 
-(defmethod Expr->map clojure.lang.Compiler$TryExpr
-  [^clojure.lang.Compiler$TryExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$TryExpr]
-              (wall-hack :field cobj nm expr)))]
-    {:op :try
-     :env env
-     :try-expr (Expr->map (field 'tryExpr expr) env)
-     :finally-expr (Expr->map (field 'finallyExpr expr) env)
-     :catch-exprs (map CatchClause->map (field 'catchExprs expr) (repeat env))
-     :ret-local (field 'retLocal expr)
-     :finally-local (field 'finally-local)}))
+(defmethod Expr->map Compiler$TryExpr
+  [^Compiler$TryExpr expr env]
+  {:op :try
+   :env env
+   :try-expr (Expr->map (.tryExpr expr) env)
+   :finally-expr (Expr->map (.finallyExpr expr) env)
+   :catch-exprs (map CatchClause->map (.catchExprs expr) (repeat env))
+   :ret-local (.retLocal expr)
+   :finally-local (.finallyLocal expr)})
 
 (defmethod Expr->map :default
   [expr]
@@ -447,13 +395,13 @@
 
 (defn analyze [env form]
   (letfn [(invoke-analyze [context form]
-            (wall-hack :method clojure.lang.Compiler 'analyze [clojure.lang.Compiler$C Object String] clojure.lang.Compiler 
+            (wall-hack :method Compiler 'analyze [Compiler$C Object String] Compiler 
               context form nil))]
     (let [context (case (:context env)
-                    :statement clojure.lang.Compiler$C/STATEMENT
-                    :expression clojure.lang.Compiler$C/EXPRESSION
-                    :return clojure.lang.Compiler$C/RETURN
-                    :eval clojure.lang.Compiler$C/EVAL)
+                    :statement Compiler$C/STATEMENT
+                    :expression Compiler$C/EXPRESSION
+                    :return Compiler$C/RETURN
+                    :eval Compiler$C/EVAL)
           exprs (binding [*ns* (find-ns (-> env :ns :name))]
                   (try
                     (invoke-analyze context form)
@@ -473,6 +421,8 @@
 (comment
 (analyze {:ns {:name 'clojure.core} :context :eval} '(try (throw (Exception.)) (catch Exception e (throw e)) (finally 33)))
 
-  ;; Expecting more output from things like :fn-method
+;; Expecting more output from things like :fn-method
 (analyze {:ns {:name 'clojure.core} :context :eval} '(try (println 1 23) (throw (Exception.)) (catch Exception e (throw e)) ))
+
+(analyze {:ns {:name 'clojure.core} :context :eval} '(let [b 1] (fn [& a] 1)))
 )
