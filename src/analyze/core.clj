@@ -174,6 +174,17 @@
      :coll (field 'coll expr)
      :Expr-obj expr}))
 
+;; vector literal
+
+(defmethod Expr->map clojure.lang.Compiler$VectorExpr
+  [^clojure.lang.Compiler$VectorExpr expr]
+  (letfn [(field 
+            ([nm expr] (field nm expr clojure.lang.Compiler$VectorExpr))
+            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
+    {:op :vector
+     :args (map Expr->map (field 'args expr))
+     :Expr-obj expr}))
+
 ;; Untyped
 
 (defmethod Expr->map clojure.lang.Compiler$MonitorEnterExpr
@@ -263,9 +274,9 @@
 
 (defmethod Expr->map clojure.lang.Compiler$ObjExpr
   [^clojure.lang.Compiler$ObjExpr expr]
-  (letfn [(field [nm expr]
-            (let [cobj clojure.lang.Compiler$ObjExpr]
-              (wall-hack :field cobj nm expr)))]
+  (letfn [(field 
+            ([nm expr] (field nm expr clojure.lang.Compiler$ObjExpr))
+            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
     {:op :obj-expr
      :tag (field 'tag expr)
      :Expr-obj expr}))
@@ -307,6 +318,29 @@
      :tag (field 'tag expr clojure.lang.Compiler$ObjExpr)
      :Expr-obj expr}))
 
+(defmethod Expr->map clojure.lang.Compiler$NewInstanceExpr
+  [^clojure.lang.Compiler$NewInstanceExpr expr]
+  (letfn [(field 
+            ([nm expr] (field nm expr clojure.lang.Compiler$NewInstanceExpr))
+            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
+    {:op :new-instance-expr
+     :methods (map ObjMethod->map (field 'methods expr))
+     :mmap (field 'mmap expr)
+     :covariants (field 'covariants expr)
+     :tag (field 'tag expr clojure.lang.Compiler$ObjExpr)
+     :Expr-obj expr}))
+
+;; MetaExpr
+
+(defmethod Expr->map clojure.lang.Compiler$MetaExpr
+  [^clojure.lang.Compiler$MetaExpr expr]
+  (letfn [(field 
+            ([nm expr] (field nm expr clojure.lang.Compiler$MetaExpr))
+            ([nm expr cobj] (wall-hack :field cobj nm expr)))]
+    {:op :meta
+     :expr (Expr->map (field 'expr expr))
+     :meta (Expr->map (field 'meta expr))
+     :Expr-obj expr}))
 
 ;; do
 
