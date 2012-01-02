@@ -25,7 +25,26 @@
 
 ;; Examples
 
-(comment
+;; Check a chunk of the core library
+
+(def analyzed
+  (map #(apply analyze/analyze-path %) 
+       '[["clojure/test.clj" clojure.test]
+         ["clojure/set.clj" clojure.set]
+         ["clojure/java/io.clj" clojure.java.io]
+         ["clojure/stacktrace.clj" clojure.stacktrace]
+         ["clojure/pprint.clj" clojure.pprint]
+         ["clojure/walk.clj" clojure.walk]
+         ["clojure/string.clj" clojure.string]
+         ["clojure/repl.clj" clojure.repl]
+         ["clojure/core/protocols.clj" clojure.core.protocols]
+         ["clojure/template.clj" clojure.template]]))
+
+(doseq [exprs analyzed
+        exp exprs]
+  (forbid-side-effects-in-transaction exp))
+
+;; Check individual form
 
 (forbid-side-effects-in-transaction
   (analyze/analyze-one '{:ns {:name clojure.core} :context :eval}
@@ -34,4 +53,3 @@
                             (fn [] (set! *ns* 'ww)) ; TODO need context information from compiler, or to find it
                             (set! *ns* 'ss)
                             (set! *ns* 'blah)))))
-  )

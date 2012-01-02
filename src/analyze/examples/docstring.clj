@@ -23,10 +23,10 @@
 
 ;; Examples
 
-(comment
+;; Check a good chunk of the core library
 
 (def analyzed
-  (map #(apply analyze/load-path %) 
+  (map #(apply analyze/analyze-path %) 
        '[["clojure/test.clj" clojure.test]
          ["clojure/set.clj" clojure.set]
          ["clojure/java/io.clj" clojure.java.io]
@@ -42,13 +42,10 @@
         exp exprs]
   (find-and-check-defs exp))
 
-  )
-
-(comment
+;; One form at a time
 
 (find-and-check-defs
   (analyze/analyze-one {:ns {:name 'clojure.repl} :context :eval}
                        '(defn a []
                           "asdf"
                           (+ 1 1))))
-  )

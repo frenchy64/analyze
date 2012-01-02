@@ -1,6 +1,8 @@
 (set! *warn-on-reflection* false)
 
 (ns analyze.core
+  "Interface to Compiler's analyze.
+  Entry point `analyze-path` and `analyze-one`"
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
            (clojure.lang RT Compiler$DefExpr Compiler$LocalBinding Compiler$BindingInit Compiler$LetExpr
                          Compiler$LetFnExpr Compiler$StaticMethodExpr Compiler$InstanceMethodExpr Compiler$StaticFieldExpr
@@ -601,7 +603,11 @@
        (lazy-seq (cons form (forms-seq f rdr)))
        (.close rdr))))
 
-(defn load-path [source-path ns]
+(defn analyze-path 
+  "Takes a path and a namespace symbol.
+  Returns a seq of maps, with keys :op, :env. If expressions
+  have children, will have :children entry."
+  [source-path ns]
   (let [strm (.getResourceAsStream (RT/baseLoader) source-path)]
     (with-open [rdr (PushbackReader. (InputStreamReader. strm))]
       (let [frms (forms-seq nil rdr)
