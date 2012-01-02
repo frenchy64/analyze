@@ -2,7 +2,16 @@
   (:require [analyze.core :as analyze]))
 
 (defn check-def [exp]
-  (println "Found def" (:var exp)))
+  (when (= :fn-expr (-> exp :init :op))
+    (doseq [method (-> exp :init :methods)]
+      (let [body (:body method)]
+        (when (and (= :do (:op body))
+                   (< 1 (count (-> body :exprs))))
+          (let [first-exp (-> body :exprs first)]
+            (when (and (= :literal (:op first-exp))
+                       (string? (:val first-exp)))
+              (binding [*out* *err*]
+                (println "WARNING: Suspicious string, possibly misplaced docstring," (-> exp :var))))))))))
 
 (defn find-and-check-defs [exp]
   (when (= :def (:op exp))
@@ -27,8 +36,11 @@
         exp exprs]
   (find-and-check-defs exp))
 
-;; Output
-
-;Analyzing clojure.set
-;Found suspicious function clojure.set/bubble-max-key , in clojure.set
+(comment
+(find-and-check-defs
+  (analyze/analyze-one {:ns {:name 'clojure.repl} :context :eval}
+                       '(defn a []
+                          "asdf"
+                          (+ 1 1))))
+  )
 

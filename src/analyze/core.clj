@@ -621,27 +621,12 @@
 )
 (comment
 
-(def sup
-  (analyze-one {:ns {:name 'clojure.set} :context :eval}
-              '(defn superset? 
-                  "Is set1 a superset of set2?"
-                  {:added "1.2",
-                   :tag Boolean}
-                  [set1 set2]
-                  (and (>= (count set1) (count set2))
-                       (every? #(contains? set1 %) set2)))))
 (def docm
   (analyze-one {:ns {:name 'clojure.repl} :context :eval}
-    '(defmacro doc
-      "Prints documentation for a var or special form given its name"
-      {:added "1.0"}
+    '(defn doc
       [name]
-      (if-let [special-name ('{& fn catch try finally try} name)]
-        (#'print-doc (#'special-doc special-name))
-        (cond
-          (special-doc-map name) `(#'print-doc (#'special-doc '~name))
-          (resolve name) `(#'print-doc (meta (var ~name)))
-          (find-ns name) `(#'print-doc (namespace-doc (find-ns '~name))))))))
+      "Prints documentation for a var or special form given its name"
+      (+ 1 1))))
 
 
   (defn traverse [exp]
@@ -650,7 +635,6 @@
       (doseq [c children]
         (traverse c))))
 
-  (traverse sup)
   (traverse docm)
   )
 
