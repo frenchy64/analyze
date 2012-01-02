@@ -47,7 +47,7 @@
                    :line (field 'line expr))
        :var (field 'var expr)
        :init init
-       :children init
+       :children [init]
        :meta (field 'meta expr)
        :init-provided (field 'initProvided expr)
        :is-dynamic (field 'isDynamic expr)
@@ -63,12 +63,17 @@
      :sym (.sym lb)
      :tag (.tag lb)
      :init init
-     :children [init]
+     :children (when init [init])
      :LocalBinding-obj lb}))
 
 (defn BindingInit->vec [^Compiler$BindingInit bi env]
-  [(LocalBinding->map (.binding bi) env)
-   (Expr->map (.init bi) env)])
+  (let [local-binding (LocalBinding->map (.binding bi) env)
+        init (Expr->map (.init bi) env)]
+    {:op :binding-init
+     :local-binding local-binding
+     :init init
+     :children [local-binding init]
+     :BindingInit-obj bi}))
 
 (defmethod Expr->map Compiler$LetExpr
   [^Compiler$LetExpr expr env]
@@ -547,11 +552,11 @@
           (doall (map afn frms)))))))
 
 (comment
-(analyze {:ns {:name 'clojure.core} :context :eval} '(try (throw (Exception.)) (catch Exception e (throw e)) (finally 33)))
-(analyze {:ns {:name 'clojure.core} :context :eval} '(try ))
+(analyze-one {:ns {:name 'clojure.core} :context :eval} '(try (throw (Exception.)) (catch Exception e (throw e)) (finally 33)))
+(analyze-one {:ns {:name 'clojure.core} :context :eval} '(try ))
 
 ;; Expecting more output from things like :fn-method
-(analyze {:ns {:name 'clojure.core} :context :eval} '(try (println 1 23) (throw (Exception.)) (catch Exception e (throw e)) ))
+(analyze-one {:ns {:name 'clojure.core} :context :eval} '(try (println 1 23) (throw (Exception.)) (catch Exception e (throw e)) ))
 
-(analyze {:ns {:name 'clojure.core} :context :eval} '(let [b 1] (fn [& a] 1)))
+(analyze-one {:ns {:name 'clojure.core} :context :eval} '(let [b 1] (fn [& a] 1)))
 )

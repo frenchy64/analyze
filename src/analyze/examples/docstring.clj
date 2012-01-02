@@ -1,23 +1,32 @@
 (ns analyze.examples.docstring
   (:require [analyze.core :as analyze]))
 
-(defmulti check-docstring
+(defn check-def [exp]
+  (println "Found def" (:var exp)))
 
-(defn check-docstring [{:keys [op init methods name env]}]
-  (when (and (= :def op) 
-             (= :fn (:op init)))
-    (doseq [[f & rst] (map :statements (:methods init))]
-      (and (= :constant (:op f))
-           (string? (:form f))
-           (println "Found suspicious function" name  ", in" (-> env :ns :name))))))
+(defn find-and-check-defs [exps]
+  (doseq [exp exps]
+    (println "exp" (:op exp))
+    (when-let [children (seq (:children exp))]
+      (find-and-check-defs children))
+    (when (= :def (:op exp))
+      (check-def exp))))
 
 (def analyzed
-  (map analyze/analyze-namespace '[clojure.test clojure.set clojure.java.io clojure.stacktrace clojure.pprint
-                                   clojure.walk clojure.string clojure.repl clojure.core.protocols clojure.template]))
+  (map #(apply analyze/load-path %) 
+       '[["clojure/test.clj" clojure.test]
+         ["clojure/set.clj" clojure.set]
+         ["clojure/java/io.clj" clojure.java.io]
+         ["clojure/stacktrace.clj" clojure.stacktrace]
+         ["clojure/pprint.clj" clojure.pprint]
+         ["clojure/walk.clj" clojure.walk]
+         ["clojure/string.clj" clojure.string]
+         ["clojure/repl.clj" clojure.repl]
+         ["clojure/core/protocols.clj" clojure.core.protocols]
+         ["clojure/template.clj" clojure.template]]))
 
-(doseq [ns-ast analyzed
-        top-lvl-ast ns-ast]
-  (check-docstring top-lvl-ast))
+(doseq [exprs analyzed]
+  (find-and-check-defs exprs))
 
 ;; Output
 
