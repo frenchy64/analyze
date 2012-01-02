@@ -9,7 +9,8 @@
                          Compiler$UnresolvedVarExpr Compiler$ObjExpr Compiler$NewInstanceMethod Compiler$FnMethod Compiler$FnExpr
                          Compiler$NewInstanceExpr Compiler$MetaExpr Compiler$BodyExpr Compiler$ImportExpr Compiler$AssignExpr
                          Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr Compiler$RecurExpr
-                         Compiler$MapExpr Compiler$IfExpr Compiler$KeywordInvokeExpr))
+                         Compiler$MapExpr Compiler$IfExpr Compiler$KeywordInvokeExpr Compiler$InstanceFieldExpr Compiler$InstanceOfExpr
+                         Compiler$CaseExpr))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
             [clojure.repl :as repl]))
@@ -40,15 +41,17 @@
   (letfn [(field [nm expr]
                  (let [cobj Compiler$DefExpr]
                    (wall-hack :field cobj nm expr)))]
-    (let [init (Expr->map (field 'init expr) env)]
+    (let [init (Expr->map (field 'init expr) env)
+          meta (when-let [meta (field 'meta expr)]
+                 (Expr->map meta env))]
       {:op :def
        :env (assoc env 
                    :source (field 'source expr)
                    :line (field 'line expr))
        :var (field 'var expr)
+       :meta meta
        :init init
-       :children [init]
-       :meta (field 'meta expr)
+       :children [meta init]
        :init-provided (field 'initProvided expr)
        :is-dynamic (field 'isDynamic expr)
        :Expr-obj expr})))
@@ -78,7 +81,7 @@
 (defmethod Expr->map Compiler$LetExpr
   [^Compiler$LetExpr expr env]
   (let [body (Expr->map (.body expr) env)
-        bindings (-> (map BindingInit->vec (.bindingInits expr) (repeat env))
+        bindings (-> (doall (map BindingInit->vec (.bindingInits expr) (repeat env)))
                    vec)]
     {:op :let
      :env env
@@ -91,12 +94,15 @@
 
 (defmethod Expr->map Compiler$LetFnExpr
   [^Compiler$LetFnExpr expr env]
-  (let [body (Expr->map (.body expr) env)]
+  (let [body (Expr->map (.body expr) env)
+        binding-inits (-> (doall (map BindingInit->vec (.bindingInits expr)))
+                        vec)]
     {:op :letfn
      :env env
      :body body
-     :children [body]
-     :binding-inits (map BindingInit->vec (.bindingInits expr))}))
+     :binding-inits binding-inits
+     :children (conj binding-inits body)
+     :Expr-obj expr}))
 
 ;; LocalBindingExpr
 
@@ -117,14 +123,15 @@
   (letfn [(field [nm expr]
             (let [cobj Compiler$StaticMethodExpr]
               (wall-hack :field cobj nm expr)))]
-    (let [args (map Expr->map (field 'args expr) (repeat env))]
+    (let [args (doall (map Expr->map (field 'args expr) (repeat env)))]
       {:op :static-method 
        :env (assoc env
                    :source (field 'source expr)
                    :line (field 'line expr))
        :class (field 'c expr)
        :method-name (field 'methodName expr)
-       :method (@#'reflect/method->map (field 'method expr))
+       :method (when-let [method (field 'method expr)]
+                 (@#'reflect/method->map method))
        :args args
        :tag (field 'tag expr)
        :children args
@@ -135,14 +142,15 @@
   (letfn [(field [nm expr]
             (let [cobj Compiler$InstanceMethodExpr]
               (wall-hack :field cobj nm expr)))]
-    (let [args (map Expr->map (field 'args expr) (repeat env))]
+    (let [args (doall (map Expr->map (field 'args expr) (repeat env)))]
       {:op :instance-method 
        :env (assoc env
                    :source (field 'source expr)
                    :line (field 'line expr))
        :target (field 'target expr)
        :method-name (field 'methodName expr)
-       :method (@#'reflect/method->map (field 'method expr))
+       :method (when-let [method (field 'method expr)]
+                 (@#'reflect/method->map method))
        :args args
        :tag (field 'tag expr)
        :children args
@@ -160,16 +168,35 @@
                  :line (field 'line expr))
      :class (field 'c expr)
      :field-name (field 'fieldName expr)
-     :field (@#'reflect/field->map (field 'field expr))
+     :field (when-let [field (field 'field expr)]
+              (@#'reflect/field->map field))
      :tag (field 'tag expr)
      :Expr-obj expr}))
 
+(defmethod Expr->map Compiler$InstanceFieldExpr
+  [^Compiler$InstanceFieldExpr expr env]
+  (letfn [(field [nm expr]
+            (let [cobj Compiler$InstanceFieldExpr]
+              (wall-hack :field cobj nm expr)))]
+    (let [target (Expr->map (field 'target expr) env)]
+      {:op :static-field
+       :env (assoc env
+                   :line (field 'line expr))
+       :target target
+       :target-class (field 'targetClass expr)
+       :field (when-let [field (field 'field expr)]
+                (@#'reflect/field->map field))
+       :field-name (field 'fieldName expr)
+       :tag (field 'tag expr)
+       :children [target]})))
+
 (defmethod Expr->map Compiler$NewExpr
   [^Compiler$NewExpr expr env]
-  (let [args (map Expr->map (.args expr) (repeat env))]
+  (let [args (doall (map Expr->map (.args expr) (repeat env)))]
     {:op :new 
      :env env
-     :ctor (@#'reflect/constructor->map (.ctor expr))
+     :ctor (when-let [ctor (.ctor expr)]
+             (@#'reflect/constructor->map ctor))
      :class (.c expr)
      :args args
      :children args
@@ -198,7 +225,7 @@
 
 (defmethod Expr->map Compiler$VectorExpr
   [^Compiler$VectorExpr expr env]
-  (let [args (map Expr->map (.args expr) (repeat env))]
+  (let [args (doall (map Expr->map (.args expr) (repeat env)))]
     {:op :vector
      :env env
      :args args
@@ -209,7 +236,7 @@
 
 (defmethod Expr->map Compiler$MapExpr
   [^Compiler$MapExpr expr env]
-  (let [keyvals (map Expr->map (.keyvals expr) (repeat env))]
+  (let [keyvals (doall (map Expr->map (.keyvals expr) (repeat env)))]
     {:op :map
      :env env
      :keyvals keyvals
@@ -262,7 +289,7 @@
             (let [cobj Compiler$InvokeExpr]
               (wall-hack :field cobj nm expr)))]
     (let [fexpr (Expr->map (field 'fexpr expr) env)
-          args (map Expr->map (field 'args expr) (repeat env))]
+          args (doall (map Expr->map (field 'args expr) (repeat env)))]
       (merge
         {:op :invoke
          :env (assoc env
@@ -353,13 +380,14 @@
 
 (defmethod ObjMethod->map Compiler$FnMethod 
   [^Compiler$FnMethod obm env]
-  (let [body (Expr->map (.body obm) env)]
+  (let [body (Expr->map (.body obm) env)
+        required-params (doall (map LocalBinding->map (.reqParms obm) (repeat env)))]
     {:op :fn-method
      :env env
      :body body
      ;; Map LocalExpr@xx -> LocalExpr@xx
      ;   :locals (map Expr->map (keys (.locals obm)) (repeat env))
-     :required-params (map LocalBinding->map (.reqParms obm) (repeat env))
+     :required-params required-params
      :rest-param (let [rest-param (.restParm obm)]
                    (if rest-param
                      (LocalBinding->map rest-param env)
@@ -369,7 +397,7 @@
 
 (defmethod Expr->map Compiler$FnExpr
   [^Compiler$FnExpr expr env]
-  (let [methods (map ObjMethod->map (.methods expr) (repeat env))]
+  (let [methods (doall (map ObjMethod->map (.methods expr) (repeat env)))]
     {:op :fn-expr
      :env env
      :methods methods
@@ -383,7 +411,7 @@
 
 (defmethod Expr->map Compiler$NewInstanceExpr
   [^Compiler$NewInstanceExpr expr env]
-  (let [methods (map ObjMethod->map (.methods expr) (repeat env))]
+  (let [methods (doall (map ObjMethod->map (.methods expr) (repeat env)))]
     {:op :new-instance-expr
      :env env
      :methods methods
@@ -392,6 +420,20 @@
      :tag (.tag expr)
      :children methods
      :Expr-obj expr}))
+
+;; InstanceOfExpr
+
+(defmethod Expr->map Compiler$InstanceOfExpr
+  [^Compiler$InstanceOfExpr expr env]
+  (letfn [(field [nm expr]
+                 (let [cobj Compiler$InstanceOfExpr]
+                   (wall-hack :field cobj nm expr)))]
+    (let [exp (Expr->map (field 'expr expr) env)]
+      {:op :instance-of
+       :class (field 'c expr)
+       :the-expr exp
+       :children [exp]
+       :Expr-obj expr})))
 
 ;; MetaExpr
 
@@ -410,7 +452,7 @@
 
 (defmethod Expr->map Compiler$BodyExpr
   [^Compiler$BodyExpr expr env]
-  (let [exprs (map Expr->map (.exprs expr) (repeat env))]
+  (let [exprs (doall (map Expr->map (.exprs expr) (repeat env)))]
     {:op :do
      :env env
      :exprs exprs
@@ -423,15 +465,32 @@
   [^Compiler$IfExpr expr env]
   (let [test (Expr->map (.testExpr expr) env)
         then (Expr->map (.thenExpr expr) env)
-        else (when-let [else-expr (.elseExpr expr)]
-               (Expr->map else-expr env))]
+        else (Expr->map (.elseExpr expr) env)]
     {:op :if
-     :env env
+     :env (assoc env
+                 :line (.line expr))
      :test test
      :then then
      :else else
-     :children (concat [test then] (when else [else]))
+     :children [test then else]
      :Expr-obj expr}))
+
+;; case
+
+(defmethod Expr->map Compiler$CaseExpr
+  [^Compiler$CaseExpr expr env]
+  (let [the-expr (Expr->map (.expr expr) env)
+        tests (doall (map Expr->map (vals (.tests expr)) (repeat env)))
+        thens (doall (map Expr->map (vals (.thens expr)) (repeat env)))
+        default (Expr->map (.defaultExpr expr) env)]
+    {:op :case*
+     :the-expr the-expr
+     :tests tests
+     :thens thens
+     :default default
+     :children (concat [the-expr] tests thens [default])
+     :Expr-obj expr}))
+
 
 ;; ImportExpr
 
@@ -473,7 +532,7 @@
   (let [try-expr (Expr->map (.tryExpr expr) env)
         finally-expr (when-let [finally-expr (.finallyExpr expr)]
                        (Expr->map finally-expr env))
-        catch-exprs (map CatchClause->map (.catchExprs expr) (repeat env))]
+        catch-exprs (doall (map CatchClause->map (.catchExprs expr) (repeat env)))]
     {:op :try
      :env env
      :try-expr try-expr
@@ -491,8 +550,8 @@
   (letfn [(field [nm expr]
                  (let [cobj Compiler$RecurExpr]
                    (wall-hack :field cobj nm expr)))]
-    (let [loop-locals (map LocalBinding->map (.loopLocals expr) (repeat env))
-          args (map Expr->map (.args expr) (repeat env))]
+    (let [loop-locals (doall (map LocalBinding->map (.loopLocals expr) (repeat env)))
+          args (doall (map Expr->map (.args expr) (repeat env)))]
       {:op :recur
        :env (assoc env
                    :line (field 'line expr)
@@ -560,3 +619,40 @@
 
 (analyze-one {:ns {:name 'clojure.core} :context :eval} '(let [b 1] (fn [& a] 1)))
 )
+(comment
+
+(def sup
+  (analyze-one {:ns {:name 'clojure.set} :context :eval}
+              '(defn superset? 
+                  "Is set1 a superset of set2?"
+                  {:added "1.2",
+                   :tag Boolean}
+                  [set1 set2]
+                  (and (>= (count set1) (count set2))
+                       (every? #(contains? set1 %) set2)))))
+(def docm
+  (analyze-one {:ns {:name 'clojure.repl} :context :eval}
+    '(defmacro doc
+      "Prints documentation for a var or special form given its name"
+      {:added "1.0"}
+      [name]
+      (if-let [special-name ('{& fn catch try finally try} name)]
+        (#'print-doc (#'special-doc special-name))
+        (cond
+          (special-doc-map name) `(#'print-doc (#'special-doc '~name))
+          (resolve name) `(#'print-doc (meta (var ~name)))
+          (find-ns name) `(#'print-doc (namespace-doc (find-ns '~name))))))))
+
+
+  (defn traverse [exp]
+    (println "op" (:op exp))
+    (when-let [children (seq (:children exp))]
+      (doseq [c children]
+        (traverse c))))
+
+  (traverse sup)
+  (traverse docm)
+  )
+
+
+
