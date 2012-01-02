@@ -1,4 +1,6 @@
 (ns analyze.examples.docstring
+  "Warns on suspected misplaced docstrings in function definitions.
+  Entry point `find-and-check-defs`"
   (:require [analyze.core :as analyze]))
 
 (defn check-def [exp]
@@ -19,6 +21,10 @@
   (doseq [child-exp (:children exp)]
     (find-and-check-defs child-exp)))
 
+;; Examples
+
+(comment
+
 (def analyzed
   (map #(apply analyze/load-path %) 
        '[["clojure/test.clj" clojure.test]
@@ -36,11 +42,13 @@
         exp exprs]
   (find-and-check-defs exp))
 
+  )
+
 (comment
+
 (find-and-check-defs
   (analyze/analyze-one {:ns {:name 'clojure.repl} :context :eval}
                        '(defn a []
                           "asdf"
                           (+ 1 1))))
   )
-
