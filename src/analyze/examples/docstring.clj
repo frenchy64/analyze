@@ -1,6 +1,8 @@
 (ns analyze.examples.docstring
   (:require [analyze.core :as analyze]))
 
+(defmulti check-docstring
+
 (defn check-docstring [{:keys [op init methods name env]}]
   (when (and (= :def op) 
              (= :fn (:op init)))

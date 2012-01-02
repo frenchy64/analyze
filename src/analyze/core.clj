@@ -1,23 +1,15 @@
-;   Copyright (c) Rich Hickey. All rights reserved.
-;   The use and distribution terms for this software are covered by the
-;   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
-;   which can be found in the file epl-v10.html at the root of this distribution.
-;   By using this software in any fashion, you are agreeing to be bound by
-;   the terms of this license.
-;   You must not remove this notice, or any other, from this software.
-
 (set! *warn-on-reflection* false)
 
 (ns analyze.core
-  (:refer-clojure :exclude [munge macroexpand-1])
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
-           (clojure.lang Compiler$DefExpr Compiler$LocalBinding Compiler$BindingInit Compiler$LetExpr
+           (clojure.lang RT Compiler$DefExpr Compiler$LocalBinding Compiler$BindingInit Compiler$LetExpr
                          Compiler$LetFnExpr Compiler$StaticMethodExpr Compiler$InstanceMethodExpr Compiler$StaticFieldExpr
                          Compiler$NewExpr Compiler$LiteralExpr Compiler$EmptyExpr Compiler$VectorExpr Compiler$MonitorEnterExpr
                          Compiler$MonitorExitExpr Compiler$ThrowExpr Compiler$InvokeExpr Compiler$TheVarExpr Compiler$VarExpr
                          Compiler$UnresolvedVarExpr Compiler$ObjExpr Compiler$NewInstanceMethod Compiler$FnMethod Compiler$FnExpr
                          Compiler$NewInstanceExpr Compiler$MetaExpr Compiler$BodyExpr Compiler$ImportExpr Compiler$AssignExpr
-                         Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr Compiler$RecurExpr))
+                         Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr Compiler$RecurExpr
+                         Compiler$MapExpr Compiler$IfExpr))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
             [clojure.repl :as repl]))
@@ -37,7 +29,9 @@
       :field
       (wall-hack-field class-name member-name (first args)))))
 
-(defmulti Expr->map (fn Expr->map [& args] (-> args first class)))
+(defmulti Expr->map (fn Expr->map [& args] 
+                      (assert (= 2 (count args)))
+                      (-> args first class)))
 
 ;; def
 
@@ -51,7 +45,7 @@
                  :source (field 'source expr)
                  :line (field 'line expr))
      :var (field 'var expr)
-     :init (Expr->map (field 'init expr))
+     :init (Expr->map (field 'init expr) env)
      :meta (field 'meta expr)
      :init-provided (field 'initProvided expr)
      :is-dynamic (field 'isDynamic expr)
@@ -85,7 +79,7 @@
   [^Compiler$LetFnExpr expr env]
   {:op :letfn
    :env env
-   :body (Expr->map (.body expr))
+   :body (Expr->map (.body expr) env)
    :binding-inits (map BindingInit->vec (.bindingInits expr))})
 
 ;; LocalBindingExpr
@@ -112,7 +106,7 @@
      :class (field 'c expr)
      :method-name (field 'methodName expr)
      :method (@#'reflect/method->map (field 'method expr))
-     :args (map Expr->map (field 'args expr))
+     :args (map Expr->map (field 'args expr) (repeat env))
      :tag (field 'tag expr)
      :Expr-obj expr}))
 
@@ -128,7 +122,7 @@
      :target (field 'target expr)
      :method-name (field 'methodName expr)
      :method (@#'reflect/method->map (field 'method expr))
-     :args (map Expr->map (field 'args expr))
+     :args (map Expr->map (field 'args expr) (repeat env))
      :tag (field 'tag expr)
      :Expr-obj expr}))
 
@@ -183,6 +177,15 @@
   {:op :vector
    :env env
    :args (map Expr->map (.args expr) (repeat env))
+   :Expr-obj expr})
+
+;; map literal
+
+(defmethod Expr->map Compiler$MapExpr
+  [^Compiler$MapExpr expr env]
+  {:op :map
+   :env env
+   :keyvals (.keyvals expr)
    :Expr-obj expr})
 
 ;; Untyped
@@ -282,7 +285,9 @@
 
 ;; FnExpr (extends ObjExpr)
 
-(defmulti ObjMethod->map (fn [& args] (-> args first class)))
+(defmulti ObjMethod->map (fn [& args] 
+                           (assert (= 2 (count args)))
+                           (-> args first class)))
 
 (defmethod ObjMethod->map Compiler$NewInstanceMethod 
   [^Compiler$NewInstanceMethod obm env]
@@ -345,6 +350,18 @@
    :exprs (map Expr->map (.exprs expr) (repeat env))
    :Expr-obj expr})
 
+;; if
+
+(defmethod Expr->map Compiler$IfExpr
+  [^Compiler$IfExpr expr env]
+  {:op :if
+   :env env
+   :test (Expr->map (.testExpr expr) env)
+   :then (Expr->map (.thenExpr expr) env)
+   :else (when-let [else-expr (.elseExpr expr)]
+           (Expr->map else-expr env))
+   :Expr-obj expr})
+
 ;; ImportExpr
 
 (defmethod Expr->map Compiler$ImportExpr
@@ -393,7 +410,7 @@
   {:op :recur
    :env env ;TODO line, source
    :args (map Expr->map (.args expr) (repeat env))
-   :loop-locals (map Expr->map (.loopLocals expr) (repeat env))
+   :loop-locals (map LocalBinding->map (.loopLocals expr) (repeat env))
    :Expr-obj expr})
 
 (defmethod Expr->map :default
@@ -402,17 +419,13 @@
   (throw (Exception. (str "No method in multimethod 'Expr->map' for dispatch value: " (class expr)))))
 
 
-
-
-
-
 (defn wall-hack-method [class-name method-name types obj & args]
   (-> class-name (.getDeclaredMethod (name method-name)
                                      (into-array Class (seq types)))
     (doto (.setAccessible true))
     (.invoke obj (into-array Object args))))
 
-(defn analyze [env form]
+(defn- analyze* [env form]
   (letfn [(invoke-analyze [context form]
             (wall-hack :method Compiler 'analyze [Compiler$C Object String] Compiler 
               context form nil))]
@@ -421,12 +434,15 @@
                     :expression Compiler$C/EXPRESSION
                     :return Compiler$C/RETURN
                     :eval Compiler$C/EVAL)
-          exprs (binding [*ns* (find-ns (-> env :ns :name))]
-                  (try
-                    (invoke-analyze context form)
-                    (catch RuntimeException e
-                      (throw (repl/root-cause e)))))]
+          exprs (try
+                  (invoke-analyze context form)
+                  (catch RuntimeException e
+                    (throw (repl/root-cause e))))]
       (Expr->map exprs (merge-with conj (dissoc env :context) {:locals {}})))))
+
+(defn analyze-one [env form]
+  (binding [*ns* (find-ns (-> env :ns :name))]
+    (analyze* env form)))
 
 (defn forms-seq
   "Seq of forms in a Clojure or ClojureScript file."
@@ -436,6 +452,15 @@
      (if-let [form (read rdr nil nil)]
        (lazy-seq (cons form (forms-seq f rdr)))
        (.close rdr))))
+
+(defn load-path [source-path]
+  (let [strm (.getResourceAsStream (RT/baseLoader) source-path)]
+    (with-open [rdr (PushbackReader. (InputStreamReader. strm))]
+      (let [frms (forms-seq nil rdr)
+            afn #(let [env {:ns {} :context :eval :locals {}}]
+                   (analyze* env %))]
+        (binding [*ns* (find-ns 'clojure.set)]
+          (doall (map afn frms)))))))
 
 (comment
 (analyze {:ns {:name 'clojure.core} :context :eval} '(try (throw (Exception.)) (catch Exception e (throw e)) (finally 33)))
