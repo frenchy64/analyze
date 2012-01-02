@@ -611,7 +611,7 @@
   (let [strm (.getResourceAsStream (RT/baseLoader) source-path)]
     (with-open [rdr (PushbackReader. (InputStreamReader. strm))]
       (let [frms (forms-seq nil rdr)
-            afn #(let [env {:ns {} :context :eval :locals {}}]
+            afn #(let [env {:ns {:name ns} :context :eval :locals {}}]
                    (analyze* env %))]
         (binding [*ns* (find-ns ns)]
           (doall (map afn frms)))))))
@@ -624,7 +624,11 @@
 (analyze-one {:ns {:name 'clojure.core} :context :eval} '(try (println 1 23) (throw (Exception.)) (catch Exception e (throw e)) ))
 
 (analyze-one {:ns {:name 'clojure.core} :context :eval} '(let [b 1] (fn [& a] 1)))
+
+(analyze-one {:ns {:name 'clojure.core} :context :eval} '(Integer. (+ 1 1)))
+(analyze-one {:ns {:name 'clojure.core} :context :eval} '(Integer. (+ 1 1)))
 )
+
 (comment
 
 (def docm
@@ -643,6 +647,3 @@
 
   (traverse docm)
   )
-
-
-
