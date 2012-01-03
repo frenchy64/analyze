@@ -1,5 +1,7 @@
 (set! *warn-on-reflection* false)
 
+;; TODO SetExpr
+
 (ns analyze.core
   "Interface to Compiler's analyze.
   Entry point `analyze-path` and `analyze-one`"
@@ -12,10 +14,11 @@
                          Compiler$NewInstanceExpr Compiler$MetaExpr Compiler$BodyExpr Compiler$ImportExpr Compiler$AssignExpr
                          Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr Compiler$RecurExpr
                          Compiler$MapExpr Compiler$IfExpr Compiler$KeywordInvokeExpr Compiler$InstanceFieldExpr Compiler$InstanceOfExpr
-                         Compiler$CaseExpr))
+                         Compiler$CaseExpr Compiler$Expr Compiler$SetExpr))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
-            [clojure.repl :as repl]))
+            [clojure.repl :as repl]
+            [clojure.string :as string]))
 
 (defn wall-hack [what class-name member-name & args]
   (letfn [(wall-hack-field [class-name field-name obj]
@@ -32,7 +35,8 @@
       :field
       (wall-hack-field class-name member-name (first args)))))
 
-(defmulti Expr->map (fn Expr->map [& args] 
+(defmulti Expr->map (fn Expr->map [& args]
+                      (assert (re-find #"Expr" (.getSimpleName (class (first args)))))
                       (assert (= 2 (count args)))
                       (-> args first class)))
 
@@ -222,6 +226,17 @@
    :env env
    :coll (.coll expr)
    :Expr-obj expr})
+
+;; set literal
+
+(defmethod Expr->map Compiler$SetExpr
+  [^Compiler$SetExpr expr env]
+  (let [keys (doall (map Expr->map (.keys expr) (repeat env)))]
+    {:op :set
+     :env env
+     :keys keys
+     :children keys
+     :Expr-obj expr}))
 
 ;; vector literal
 
@@ -575,10 +590,29 @@
     (doto (.setAccessible true))
     (.invoke obj (into-array Object args))))
 
+;   RT.map(LOADER, RT.makeClassLoader(),
+;          SOURCE_PATH, sourcePath,
+;          SOURCE, sourceName,
+;          METHOD, null,
+;          LOCAL_ENV, null,
+;       LOOP_LOCALS, null,
+;       NEXT_LOCAL_NUM, 0,
+;          RT.CURRENT_NS, RT.CURRENT_NS.deref(),
+;          LINE_BEFORE, pushbackReader.getLineNumber(),
+;          LINE_AFTER, pushbackReader.getLineNumber()
+;          ,RT.UNCHECKED_MATH, RT.UNCHECKED_MATH.deref()
+;       ,RT.WARN_ON_REFLECTION, RT.WARN_ON_REFLECTION.deref()
+;   );
+
+
 (defn- analyze* [env form]
   (letfn [(invoke-analyze [context form]
-            (wall-hack :method Compiler 'analyze [Compiler$C Object String] Compiler 
-              context form nil))]
+            (push-thread-bindings {Compiler/LOADER (RT/makeClassLoader)})
+            (try
+              (wall-hack :method Compiler 'analyze [Compiler$C Object String] Compiler 
+                 context form nil)
+              (finally
+                (pop-thread-bindings))))]
     (let [context (case (:context env)
                     :statement Compiler$C/STATEMENT
                     :expression Compiler$C/EXPRESSION
@@ -627,6 +661,8 @@
 
 (analyze-one {:ns {:name 'clojure.core} :context :eval} '(Integer. (+ 1 1)))
 (analyze-one {:ns {:name 'clojure.core} :context :eval} '(Integer. (+ 1 1)))
+
+(analyze-one {:ns {:name 'clojure.core} :context :eval} '(map io/file [1 2]))
 )
 
 (comment
