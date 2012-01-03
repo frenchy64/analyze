@@ -56,8 +56,8 @@
        :meta meta
        :init init
        :children [meta init]
-       :init-provided (field 'initProvided expr)
-       :is-dynamic (field 'isDynamic expr)
+       :init-provided (boolean (field 'initProvided expr))
+       :is-dynamic (boolean (field 'isDynamic expr))
        :Expr-obj expr})))
 
 ;; let
