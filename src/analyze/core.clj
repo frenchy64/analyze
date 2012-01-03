@@ -592,8 +592,7 @@
   (letfn [(invoke-analyze [context form]
             (push-thread-bindings {Compiler/LOADER (RT/makeClassLoader)})
             (try
-              (wall-hack :method Compiler 'analyze [Compiler$C Object String] Compiler 
-                 context form nil)
+              (Compiler/analyze context form)
               (finally
                 (pop-thread-bindings))))]
     (let [context (case (:context env)
