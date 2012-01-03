@@ -1,7 +1,5 @@
 (set! *warn-on-reflection* false)
 
-;; TODO SetExpr
-
 (ns analyze.core
   "Interface to Compiler's analyze.
   Entry point `analyze-path` and `analyze-one`"
@@ -590,21 +588,6 @@
     (doto (.setAccessible true))
     (.invoke obj (into-array Object args))))
 
-;   RT.map(LOADER, RT.makeClassLoader(),
-;          SOURCE_PATH, sourcePath,
-;          SOURCE, sourceName,
-;          METHOD, null,
-;          LOCAL_ENV, null,
-;       LOOP_LOCALS, null,
-;       NEXT_LOCAL_NUM, 0,
-;          RT.CURRENT_NS, RT.CURRENT_NS.deref(),
-;          LINE_BEFORE, pushbackReader.getLineNumber(),
-;          LINE_AFTER, pushbackReader.getLineNumber()
-;          ,RT.UNCHECKED_MATH, RT.UNCHECKED_MATH.deref()
-;       ,RT.WARN_ON_REFLECTION, RT.WARN_ON_REFLECTION.deref()
-;   );
-
-
 (defn- analyze* [env form]
   (letfn [(invoke-analyze [context form]
             (push-thread-bindings {Compiler/LOADER (RT/makeClassLoader)})
@@ -663,7 +646,8 @@
 (analyze-one {:ns {:name 'clojure.core} :context :eval} '(Integer. (+ 1 1)))
 
 (analyze-one {:ns {:name 'clojure.core} :context :eval} '(map io/file [1 2]))
-)
+
+  )
 
 (comment
 
