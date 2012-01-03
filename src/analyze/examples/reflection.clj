@@ -2,10 +2,7 @@
 
 (ns analyze.examples.reflection
   "Same as *warn-on-reflection*"
-  (:require [analyze.core :as analyze]
-            clojure.test
-            clojure.stacktrace
-            clojure.template))
+  (:require [analyze.core :as analyze]))
 
 (defn check-new [exp]
   (when (not (:ctor exp))

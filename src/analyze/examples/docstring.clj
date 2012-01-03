@@ -1,10 +1,7 @@
 (ns analyze.examples.docstring
   "Warns on suspected misplaced docstrings in function definitions.
   Entry point `find-and-check-defs`"
-  (:require [analyze.core :as analyze]
-            clojure.test
-            clojure.stacktrace
-            clojure.template))
+  (:require [analyze.core :as analyze]))
 
 (defn check-def [exp]
   (when (= :fn-expr (-> exp :init :op))

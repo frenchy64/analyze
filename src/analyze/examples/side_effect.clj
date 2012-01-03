@@ -2,10 +2,7 @@
   "Warns on invocations of `set!` inside transactions.
   Entry point `forbid-side-effects-in-transaction`"
   (:require [analyze.core :as analyze]
-            [clojure.reflect :as reflect]
-            clojure.test
-            clojure.stacktrace
-            clojure.template))
+            [clojure.reflect :as reflect]))
 
 (def transaction-method
   "dosync reduces to a call to this method"
