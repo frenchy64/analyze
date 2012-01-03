@@ -624,6 +624,7 @@
   Returns a seq of maps, with keys :op, :env. If expressions
   have children, will have :children entry."
   [source-path ns]
+  (require ns)
   (let [strm (.getResourceAsStream (RT/baseLoader) source-path)]
     (with-open [rdr (PushbackReader. (InputStreamReader. strm))]
       (let [frms (forms-seq nil rdr)
