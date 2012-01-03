@@ -18,20 +18,18 @@
             [clojure.repl :as repl]
             [clojure.string :as string]))
 
-(defn wall-hack [what class-name member-name & args]
-  (letfn [(wall-hack-field [class-name field-name obj]
-                           (-> class-name (.getDeclaredField (name field-name))
-                             (doto (.setAccessible true)) (.get obj)))
-          (wall-hack-method [class-name method-name types obj args]
-                            (-> class-name (.getDeclaredMethod (name method-name)
-                                                               (into-array Class types))
-                              (doto (.setAccessible true))
-                              (.invoke obj (into-array Object args))))]
-    (condp = what
-      :method
-      (wall-hack-method class-name member-name (first args) (fnext args) (nnext args))
-      :field
-      (wall-hack-field class-name member-name (first args)))))
+(defn field-accessor [klass field obj]
+  (let [field (.getDeclaredField klass (name field))]
+    (.setAccessible field true)
+    (let [ret (.get field obj)]
+      (if (instance? Boolean ret)
+        (boolean ret)
+        ret))))
+
+(defn method-accessor [klass method obj types & args]
+  (let [method (.getDeclaredMethod klass (name method) (into-array Class types))]
+    (.setAccessible method true)
+    (.invoke method obj (object-array args))))
 
 (defmulti Expr->map (fn Expr->map [& args]
                       (assert (re-find #"Expr" (.getSimpleName (class (first args)))))
@@ -42,23 +40,21 @@
 
 (defmethod Expr->map Compiler$DefExpr
   [^Compiler$DefExpr expr env]
-  (letfn [(field [nm expr]
-                 (let [cobj Compiler$DefExpr]
-                   (wall-hack :field cobj nm expr)))]
-    (let [init (Expr->map (field 'init expr) env)
-          meta (when-let [meta (field 'meta expr)]
-                 (Expr->map meta env))]
-      {:op :def
-       :env (assoc env 
-                   :source (field 'source expr)
-                   :line (field 'line expr))
-       :var (field 'var expr)
-       :meta meta
-       :init init
-       :children [meta init]
-       :init-provided (field 'initProvided expr)
-       :is-dynamic (field 'isDynamic expr)
-       :Expr-obj expr})))
+  (let [field (partial field-accessor Compiler$DefExpr)
+        init (Expr->map (field 'init expr) env)
+        meta (when-let [meta (field 'meta expr)]
+               (Expr->map meta env))]
+    {:op :def
+     :env (assoc env 
+            :source (field 'source expr)
+            :line (field 'line expr))
+     :var (field 'var expr)
+     :meta meta
+     :init init
+     :children [meta init]
+     :init-provided (field 'initProvided expr)
+     :is-dynamic (field 'isDynamic expr)
+     :Expr-obj expr}))
 
 ;; let
 
@@ -124,52 +120,46 @@
 
 (defmethod Expr->map Compiler$StaticMethodExpr
   [^Compiler$StaticMethodExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$StaticMethodExpr]
-              (wall-hack :field cobj nm expr)))]
-    (let [args (doall (map Expr->map (field 'args expr) (repeat env)))]
-      {:op :static-method 
-       :env (assoc env
-                   :source (field 'source expr)
-                   :line (field 'line expr))
-       :class (field 'c expr)
-       :method-name (field 'methodName expr)
-       :method (when-let [method (field 'method expr)]
-                 (@#'reflect/method->map method))
-       :args args
-       :tag (field 'tag expr)
-       :children args
-       :Expr-obj expr})))
+  (let [field (partial field-accessor Compiler$StaticMethodExpr)
+        args (doall (map Expr->map (field 'args expr) (repeat env)))]
+    {:op :static-method 
+     :env (assoc env
+            :source (field 'source expr)
+            :line (field 'line expr))
+     :class (field 'c expr)
+     :method-name (field 'methodName expr)
+     :method (when-let [method (field 'method expr)]
+               (@#'reflect/method->map method))
+     :args args
+     :tag (field 'tag expr)
+     :children args
+     :Expr-obj expr}))
 
 (defmethod Expr->map Compiler$InstanceMethodExpr
   [^Compiler$InstanceMethodExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$InstanceMethodExpr]
-              (wall-hack :field cobj nm expr)))]
-    (let [args (doall (map Expr->map (field 'args expr) (repeat env)))]
-      {:op :instance-method 
-       :env (assoc env
-                   :source (field 'source expr)
-                   :line (field 'line expr))
-       :target (field 'target expr)
-       :method-name (field 'methodName expr)
-       :method (when-let [method (field 'method expr)]
-                 (@#'reflect/method->map method))
-       :args args
-       :tag (field 'tag expr)
-       :children args
-       :Expr-obj expr})))
+  (let [field (partial field-accessor Compiler$InstanceMethodExpr)
+        args (doall (map Expr->map (field 'args expr) (repeat env)))]
+    {:op :instance-method 
+     :env (assoc env
+            :source (field 'source expr)
+            :line (field 'line expr))
+     :target (field 'target expr)
+     :method-name (field 'methodName expr)
+     :method (when-let [method (field 'method expr)]
+               (@#'reflect/method->map method))
+     :args args
+     :tag (field 'tag expr)
+     :children args
+     :Expr-obj expr}))
 
 ;; Fields
 
 (defmethod Expr->map Compiler$StaticFieldExpr
   [^Compiler$StaticFieldExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$StaticFieldExpr]
-              (wall-hack :field cobj nm expr)))]
+  (let [field (partial field-accessor Compiler$StaticFieldExpr)]
     {:op :static-field
      :env (assoc env
-                 :line (field 'line expr))
+            :line (field 'line expr))
      :class (field 'c expr)
      :field-name (field 'fieldName expr)
      :field (when-let [field (field 'field expr)]
@@ -179,20 +169,18 @@
 
 (defmethod Expr->map Compiler$InstanceFieldExpr
   [^Compiler$InstanceFieldExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$InstanceFieldExpr]
-              (wall-hack :field cobj nm expr)))]
-    (let [target (Expr->map (field 'target expr) env)]
-      {:op :static-field
-       :env (assoc env
-                   :line (field 'line expr))
-       :target target
-       :target-class (field 'targetClass expr)
-       :field (when-let [field (field 'field expr)]
-                (@#'reflect/field->map field))
-       :field-name (field 'fieldName expr)
-       :tag (field 'tag expr)
-       :children [target]})))
+  (let [field (partial field-accessor Compiler$InstanceFieldExpr)
+        target (Expr->map (field 'target expr) env)]
+    {:op :static-field
+     :env (assoc env
+            :line (field 'line expr))
+     :target target
+     :target-class (field 'targetClass expr)
+     :field (when-let [field (field 'field expr)]
+              (@#'reflect/field->map field))
+     :field-name (field 'fieldName expr)
+     :tag (field 'tag expr)
+     :children [target]}))
 
 (defmethod Expr->map Compiler$NewExpr
   [^Compiler$NewExpr expr env]
@@ -210,9 +198,7 @@
 
 (defmethod Expr->map Compiler$LiteralExpr
   [^Compiler$LiteralExpr expr env]
-  (letfn [(method [nm expr typ]
-            (let [cobj Compiler$LiteralExpr]
-              (wall-hack :method cobj nm typ expr)))]
+  (let [method (partial method-accessor Compiler$LiteralExpr)]
     {:op :literal
      :env env
      :val (method 'val expr [])
@@ -262,81 +248,71 @@
 
 (defmethod Expr->map Compiler$MonitorEnterExpr
   [^Compiler$MonitorEnterExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$MonitorEnterExpr]
-              (wall-hack :field cobj nm expr)))]
-    (let [target (Expr->map (field 'target expr) env)]
-      {:op :monitor-enter
-       :env env
-       :target target
-       :children [target]
-       :Expr-obj expr})))
+  (let [field (partial field-accessor Compiler$MonitorEnterExpr)
+        target (Expr->map (field 'target expr) env)]
+    {:op :monitor-enter
+     :env env
+     :target target
+     :children [target]
+     :Expr-obj expr}))
 
 (defmethod Expr->map Compiler$MonitorExitExpr
   [^Compiler$MonitorExitExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$MonitorExitExpr]
-              (wall-hack :field cobj nm expr)))]
-    (let [target (Expr->map (field 'target expr) env)]
+    (let [field (partial field-accessor Compiler$MonitorExitExpr)
+          target (Expr->map (field 'target expr) env)]
       {:op :monitor-exit
        :env env
        :target target
        :children [target]
-       :Expr-obj expr})))
+       :Expr-obj expr}))
 
 (defmethod Expr->map Compiler$ThrowExpr
   [^Compiler$ThrowExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$ThrowExpr]
-              (wall-hack :field cobj nm expr)))]
-    (let [exception (Expr->map (field 'excExpr expr) env)]
-      {:op :throw
-       :env env
-       :exception exception
-       :children [exception]
-       :Expr-obj expr})))
+  (let [field (partial field-accessor Compiler$ThrowExpr)
+        exception (Expr->map (field 'excExpr expr) env)]
+    {:op :throw
+     :env env
+     :exception exception
+     :children [exception]
+     :Expr-obj expr}))
 
 ;; Invokes
 
 (defmethod Expr->map Compiler$InvokeExpr
   [^Compiler$InvokeExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$InvokeExpr]
-              (wall-hack :field cobj nm expr)))]
-    (let [fexpr (Expr->map (field 'fexpr expr) env)
-          args (doall (map Expr->map (field 'args expr) (repeat env)))]
-      (merge
-        {:op :invoke
-         :env (assoc env
-                     :line (field 'line expr)
-                     :source (field 'source expr))
-         :fexpr fexpr
-         :tag (field 'tag expr)
-         :args args
-         :is-protocol (field 'isProtocol expr)
-         :is-direct (field 'isDirect expr)
-         :site-index (field 'siteIndex expr)
-         :protocol-on (field 'protocolOn expr)
-         :children (cons fexpr args)
-         :Expr-obj expr}
-        (when-let [m (field 'onMethod expr)]
-          {:method (@#'reflect/method->map m)})))))
+  (let [field (partial field-accessor Compiler$InvokeExpr)
+        fexpr (Expr->map (field 'fexpr expr) env)
+        args (doall (map Expr->map (field 'args expr) (repeat env)))]
+    (merge
+     {:op :invoke
+      :env (assoc env
+             :line (field 'line expr)
+             :source (field 'source expr))
+      :fexpr fexpr
+      :tag (field 'tag expr)
+      :args args
+      :is-protocol (field 'isProtocol expr)
+      :is-direct (field 'isDirect expr)
+      :site-index (field 'siteIndex expr)
+      :protocol-on (field 'protocolOn expr)
+      :children (cons fexpr args)
+      :Expr-obj expr}
+     (when-let [m (field 'onMethod expr)]
+       {:method (@#'reflect/method->map m)}))))
 
 (defmethod Expr->map Compiler$KeywordInvokeExpr
   [^Compiler$KeywordInvokeExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$KeywordInvokeExpr]
-              (wall-hack :field cobj nm expr)))]
-    (let [target (Expr->map (field 'target expr) env)]
-      {:op :keyword-invoke
-       :env (assoc env
-                   :line (field 'line expr)
-                   :source (field 'source expr))
-       :kw (field 'kw expr)
-       :tag (field 'tag expr)
-       :target target
-       :children [target]
-       :Expr-obj expr})))
+  (let [field (partial field-accessor Compiler$KeywordInvokeExpr)
+        target (Expr->map (field 'target expr) env)]
+    {:op :keyword-invoke
+     :env (assoc env
+            :line (field 'line expr)
+            :source (field 'source expr))
+     :kw (field 'kw expr)
+     :tag (field 'tag expr)
+     :target target
+     :children [target]
+     :Expr-obj expr}))
 
 ;; TheVarExpr
 
@@ -361,9 +337,7 @@
 
 (defmethod Expr->map Compiler$UnresolvedVarExpr
   [^Compiler$UnresolvedVarExpr expr env]
-  (letfn [(field [nm expr]
-            (let [cobj Compiler$UnresolvedVarExpr]
-              (wall-hack :field cobj nm expr)))]
+  (let [field (partial field-accessor Compiler$UnresolvedVarExpr)]
     {:op :unresolved-var
      :env env
      :sym (field 'symbol expr)
@@ -440,15 +414,13 @@
 
 (defmethod Expr->map Compiler$InstanceOfExpr
   [^Compiler$InstanceOfExpr expr env]
-  (letfn [(field [nm expr]
-                 (let [cobj Compiler$InstanceOfExpr]
-                   (wall-hack :field cobj nm expr)))]
-    (let [exp (Expr->map (field 'expr expr) env)]
-      {:op :instance-of
-       :class (field 'c expr)
-       :the-expr exp
-       :children [exp]
-       :Expr-obj expr})))
+  (let [field (partial field-accessor Compiler$InstanceOfExpr)
+        exp (Expr->map (field 'expr expr) env)]
+    {:op :instance-of
+     :class (field 'c expr)
+     :the-expr exp
+     :children [exp]
+     :Expr-obj expr}))
 
 ;; MetaExpr
 
@@ -562,19 +534,17 @@
 
 (defmethod Expr->map Compiler$RecurExpr
   [^Compiler$RecurExpr expr env]
-  (letfn [(field [nm expr]
-                 (let [cobj Compiler$RecurExpr]
-                   (wall-hack :field cobj nm expr)))]
-    (let [loop-locals (doall (map LocalBinding->map (.loopLocals expr) (repeat env)))
-          args (doall (map Expr->map (.args expr) (repeat env)))]
-      {:op :recur
-       :env (assoc env
-                   :line (field 'line expr)
-                   :source (field 'source expr))
-       :loop-locals loop-locals
-       :args args
-       :children (concat loop-locals args)
-       :Expr-obj expr})))
+  (let [field (partial field-accessor Compiler$RecurExpr)
+        loop-locals (doall (map LocalBinding->map (.loopLocals expr) (repeat env)))
+        args (doall (map Expr->map (.args expr) (repeat env)))]
+    {:op :recur
+     :env (assoc env
+            :line (field 'line expr)
+            :source (field 'source expr))
+     :loop-locals loop-locals
+     :args args
+     :children (concat loop-locals args)
+     :Expr-obj expr}))
 
 (defmethod Expr->map :default
   [expr & args]
