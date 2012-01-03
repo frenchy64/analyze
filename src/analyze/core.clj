@@ -18,21 +18,6 @@
             [clojure.repl :as repl]
             [clojure.string :as string]))
 
-(defn wall-hack [what class-name member-name & args]
-  (letfn [(wall-hack-field [class-name field-name obj]
-                           (-> class-name (.getDeclaredField (name field-name))
-                             (doto (.setAccessible true)) (.get obj)))
-          (wall-hack-method [class-name method-name types obj args]
-                            (-> class-name (.getDeclaredMethod (name method-name)
-                                                               (into-array Class types))
-                              (doto (.setAccessible true))
-                              (.invoke obj (into-array Object args))))]
-    (condp = what
-      :method
-      (wall-hack-method class-name member-name (first args) (fnext args) (nnext args))
-      :field
-      (wall-hack-field class-name member-name (first args)))))
-
 (defn field-accessor [klass field obj]
   (let [field (.getDeclaredField klass (name field))]
     (.setAccessible field true)
@@ -41,6 +26,10 @@
         (boolean ret)
         ret))))
 
+(defn method-accessor [klass method obj types & args]
+  (let [method (.getDeclaredMethod klass (name method) (into-array Class types))]
+    (.setAccessible method true)
+    (.invoke method obj (object-array args))))
 
 (defmulti Expr->map (fn Expr->map [& args]
                       (assert (re-find #"Expr" (.getSimpleName (class (first args)))))
@@ -209,9 +198,7 @@
 
 (defmethod Expr->map Compiler$LiteralExpr
   [^Compiler$LiteralExpr expr env]
-  (letfn [(method [nm expr typ]
-            (let [cobj Compiler$LiteralExpr]
-              (wall-hack :method cobj nm typ expr)))]
+  (let [method (partial method-accessor Compiler$LiteralExpr)]
     {:op :literal
      :env env
      :val (method 'val expr [])
