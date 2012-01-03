@@ -18,16 +18,16 @@
             [clojure.repl :as repl]
             [clojure.string :as string]))
 
-(defn field-accessor [klass field obj]
-  (let [field (.getDeclaredField klass (name field))]
+(defn field-accessor [class-obj field obj]
+  (let [field (.getDeclaredField class-obj (name field))]
     (.setAccessible field true)
     (let [ret (.get field obj)]
       (if (instance? Boolean ret)
         (boolean ret)
         ret))))
 
-(defn method-accessor [klass method obj types & args]
-  (let [method (.getDeclaredMethod klass (name method) (into-array Class types))]
+(defn method-accessor [class-obj method obj types & args]
+  (let [method (.getDeclaredMethod class-obj (name method) (into-array Class types))]
     (.setAccessible method true)
     (.invoke method obj (object-array args))))
 
