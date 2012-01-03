@@ -577,7 +577,7 @@
        :Expr-obj expr})))
 
 (defmethod Expr->map :default
-  [expr]
+  [expr & args]
   (println expr)
   (throw (Exception. (str "No method in multimethod 'Expr->map' for dispatch value: " (class expr)))))
 
