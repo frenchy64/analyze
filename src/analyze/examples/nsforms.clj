@@ -1,6 +1,5 @@
-(ns nsforms
-  (:require [analyze.core :as analyze])
-  (:require [clojure.pprint :as pp]))
+(ns analyze.examples.nsforms
+  (:require [analyze.core :as analyze]))
 
 (defn warn-on-naked-use [use-expr]
   (doseq [s (map :val (:args use-expr))
