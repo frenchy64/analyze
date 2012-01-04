@@ -25,6 +25,7 @@ See [http://dev.clojure.org/pages/viewpage.action?pageId=4063367]
 - work out how to analyze a leiningen `project.clj` file
 - analyze `clojure.core`
 - get rid of requirement to provide namespace
+- does each expression have a line number attached?
 
 # Examples
 

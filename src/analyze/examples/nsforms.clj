@@ -4,7 +4,7 @@
 (defn warn-on-naked-use [use-expr]
   (doseq [s (map :val (:args use-expr))
           :when (symbol? s)]
-    (println "Warning: Naked use of" (name s))))
+    (println "Warning: Naked use of" (name s) "in" (-> use-expr :env :ns :name))))
 
 (defn use? [expr]
   (and (= :invoke (:op expr))
