@@ -26,6 +26,7 @@ See [http://dev.clojure.org/pages/viewpage.action?pageId=4063367]
 - analyze `clojure.core`
 - get rid of requirement to provide namespace
 - does each expression have a line number attached?
+- try evaling the Expr forms returned by the analyzer and see what happens
 
 # Examples
 
