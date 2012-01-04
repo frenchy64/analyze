@@ -17,4 +17,21 @@
       :field
       (wall-hack-field class-name member-name (first args)))))
 
-(def a (analyze/analyze-path "clojure/core.clj" 'clojure.core))
+(defmacro deftesteval
+  "Experimental - like defmacro, except defines a named function whose
+  body is the expansion, calls to which may be expanded inline as if
+  it were a macro. Cannot be used with variadic (&) args."
+  {:added "1.0"}
+  [name & decl]
+  (let [[pre-args [args expr]] (split-with (comp not vector?) decl)]
+    `(do
+       (defn ~name ~@pre-args ~args )
+       (fn ~name ~args ~expr))))
+
+(deftesteval myfn [x] `(+ ~x))
+
+(analyze/analyze-one '{:ns {:name analyze.examples.load-core} :context :eval}
+                     '(deftesteval myfn [x] `(+ ~x)))
+
+
+;(def a (analyze/analyze-path "clojure/core.clj" 'clojure.core))
