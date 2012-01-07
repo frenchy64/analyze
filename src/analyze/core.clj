@@ -12,7 +12,7 @@
                          Compiler$NewInstanceExpr Compiler$MetaExpr Compiler$BodyExpr Compiler$ImportExpr Compiler$AssignExpr
                          Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr Compiler$RecurExpr
                          Compiler$MapExpr Compiler$IfExpr Compiler$KeywordInvokeExpr Compiler$InstanceFieldExpr Compiler$InstanceOfExpr
-                         Compiler$CaseExpr Compiler$Expr Compiler$SetExpr))
+                         Compiler$CaseExpr Compiler$Expr Compiler$SetExpr Compiler$MethodParamExpr))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
             [clojure.repl :as repl]
@@ -95,7 +95,7 @@
 (defmethod Expr->map Compiler$LetFnExpr
   [^Compiler$LetFnExpr expr env]
   (let [body (Expr->map (.body expr) env)
-        binding-inits (-> (doall (map BindingInit->vec (.bindingInits expr)))
+        binding-inits (-> (doall (map BindingInit->vec (.bindingInits expr) (repeat env)))
                         vec)]
     {:op :letfn
      :env env
@@ -400,12 +400,13 @@
 
 (defmethod Expr->map Compiler$NewInstanceExpr
   [^Compiler$NewInstanceExpr expr env]
-  (let [methods (doall (map ObjMethod->map (.methods expr) (repeat env)))]
+  (let [field (partial field-accessor Compiler$NewInstanceExpr)
+        methods (doall (map ObjMethod->map (field 'methods expr) (repeat env)))]
     {:op :new-instance-expr
      :env env
      :methods methods
-     :mmap (.mmap expr)
-     :covariants (.covariants expr)
+     :mmap (field 'mmap expr)
+     :covariants (field 'covariants expr)
      :tag (.tag expr)
      :children methods
      :Expr-obj expr}))
@@ -544,6 +545,17 @@
      :loop-locals loop-locals
      :args args
      :children (concat loop-locals args)
+     :Expr-obj expr}))
+
+(defmethod Expr->map Compiler$MethodParamExpr
+  [expr env]
+  (let [field (partial field-accessor Compiler$MethodParamExpr)
+        method (partial method-accessor Compiler$MethodParamExpr)]
+    {:op :method-param
+     :env env
+     :class (field 'c expr)
+     :can-emit-primitive (method 'canEmitPrimitive expr [])
+     :children []
      :Expr-obj expr}))
 
 (defmethod Expr->map :default
