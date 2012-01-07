@@ -548,9 +548,15 @@
      :Expr-obj expr}))
 
 (defmethod Expr->map Compiler$MethodParamExpr
-  [expr & args]
-  ;; TODO
-  {})
+  [expr env]
+  (let [field (partial field-accessor Compiler$MethodParamExpr)
+        method (partial method-accessor Compiler$MethodParamExpr)]
+    {:op :method-param
+     :env env
+     :class (field 'c expr)
+     :can-emit-primitive (method 'canEmitPrimitive expr [])
+     :children []
+     :Expr-obj expr}))
 
 (defmethod Expr->map :default
   [expr & args]
