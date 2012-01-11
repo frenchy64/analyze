@@ -1,4 +1,4 @@
-(set! *warn-on-reflection* false)
+(set! *warn-on-reflection* true)
 
 (ns analyze.core
   "Interface to Compiler's analyze.
@@ -18,7 +18,7 @@
             [clojure.repl :as repl]
             [clojure.string :as string]))
 
-(defn field-accessor [class-obj field obj]
+(defn- field-accessor [class-obj field obj]
   (let [field (.getDeclaredField class-obj (name field))]
     (.setAccessible field true)
     (let [ret (.get field obj)]
@@ -26,23 +26,24 @@
         (boolean ret)
         ret))))
 
-(defn method-accessor [class-obj method obj types & args]
+(defn- method-accessor [class-obj method obj types & args]
   (let [method (.getDeclaredMethod class-obj (name method) (into-array Class types))]
     (.setAccessible method true)
     (.invoke method obj (object-array args))))
 
-(defmulti Expr->map (fn Expr->map [& args]
-                      (assert (<= 2 (count args)))
-                      (-> args first class)))
+(defmulti analysis->map 
+  "Recursively converts the output of the Compiler's analysis to a map"
+  (fn [aobj env]
+    (class aobj)))
 
 ;; def
 
-(defmethod Expr->map Compiler$DefExpr
+(defmethod analysis->map Compiler$DefExpr
   [^Compiler$DefExpr expr env]
   (let [field (partial field-accessor Compiler$DefExpr)
-        init (Expr->map (field 'init expr) env)
+        init (analysis->map (field 'init expr) env)
         meta (when-let [meta (field 'meta expr)]
-               (Expr->map meta env))]
+               (analysis->map meta env))]
     {:op :def
      :env (assoc env 
             :source (field 'source expr)
@@ -57,9 +58,10 @@
 
 ;; let
 
-(defn LocalBinding->map [^Compiler$LocalBinding lb env]
+(defmethod analysis->map Compiler$LocalBinding
+  [^Compiler$LocalBinding lb env]
   (let [init (when-let [init (.init lb)]
-               (Expr->map init env))]
+               (analysis->map init env))]
     {:op :local-binding
      :env env
      :sym (.sym lb)
@@ -68,19 +70,20 @@
      :children (when init [init])
      :LocalBinding-obj lb}))
 
-(defn BindingInit->vec [^Compiler$BindingInit bi env]
-  (let [local-binding (LocalBinding->map (.binding bi) env)
-        init (Expr->map (.init bi) env)]
+(defmethod analysis->map Compiler$BindingInit
+  [^Compiler$BindingInit bi env]
+  (let [local-binding (analysis->map (.binding bi) env)
+        init (analysis->map (.init bi) env)]
     {:op :binding-init
      :local-binding local-binding
      :init init
      :children [local-binding init]
      :BindingInit-obj bi}))
 
-(defmethod Expr->map Compiler$LetExpr
+(defmethod analysis->map Compiler$LetExpr
   [^Compiler$LetExpr expr env]
-  (let [body (Expr->map (.body expr) env)
-        bindings (-> (doall (map BindingInit->vec (.bindingInits expr) (repeat env)))
+  (let [body (analysis->map (.body expr) env)
+        bindings (-> (doall (map analysis->map (.bindingInits expr) (repeat env)))
                    vec)]
     {:op :let
      :env env
@@ -91,10 +94,10 @@
 
 ;; letfn
 
-(defmethod Expr->map Compiler$LetFnExpr
+(defmethod analysis->map Compiler$LetFnExpr
   [^Compiler$LetFnExpr expr env]
-  (let [body (Expr->map (.body expr) env)
-        binding-inits (-> (doall (map BindingInit->vec (.bindingInits expr) (repeat env)))
+  (let [body (analysis->map (.body expr) env)
+        binding-inits (-> (doall (map analysis->map (.bindingInits expr) (repeat env)))
                         vec)]
     {:op :letfn
      :env env
@@ -105,9 +108,9 @@
 
 ;; LocalBindingExpr
 
-(defmethod Expr->map Compiler$LocalBindingExpr
+(defmethod analysis->map Compiler$LocalBindingExpr
   [^Compiler$LocalBindingExpr expr env]
-  (let [local-binding (LocalBinding->map (.b expr) env)]
+  (let [local-binding (analysis->map (.b expr) env)]
     {:op :local-binding-expr
      :env env
      :local-binding local-binding
@@ -117,10 +120,10 @@
 
 ;; Methods
 
-(defmethod Expr->map Compiler$StaticMethodExpr
+(defmethod analysis->map Compiler$StaticMethodExpr
   [^Compiler$StaticMethodExpr expr env]
   (let [field (partial field-accessor Compiler$StaticMethodExpr)
-        args (doall (map Expr->map (field 'args expr) (repeat env)))]
+        args (doall (map analysis->map (field 'args expr) (repeat env)))]
     {:op :static-method 
      :env (assoc env
             :source (field 'source expr)
@@ -134,10 +137,10 @@
      :children args
      :Expr-obj expr}))
 
-(defmethod Expr->map Compiler$InstanceMethodExpr
+(defmethod analysis->map Compiler$InstanceMethodExpr
   [^Compiler$InstanceMethodExpr expr env]
   (let [field (partial field-accessor Compiler$InstanceMethodExpr)
-        args (doall (map Expr->map (field 'args expr) (repeat env)))]
+        args (doall (map analysis->map (field 'args expr) (repeat env)))]
     {:op :instance-method 
      :env (assoc env
             :source (field 'source expr)
@@ -153,7 +156,7 @@
 
 ;; Fields
 
-(defmethod Expr->map Compiler$StaticFieldExpr
+(defmethod analysis->map Compiler$StaticFieldExpr
   [^Compiler$StaticFieldExpr expr env]
   (let [field (partial field-accessor Compiler$StaticFieldExpr)]
     {:op :static-field
@@ -166,10 +169,10 @@
      :tag (field 'tag expr)
      :Expr-obj expr}))
 
-(defmethod Expr->map Compiler$InstanceFieldExpr
+(defmethod analysis->map Compiler$InstanceFieldExpr
   [^Compiler$InstanceFieldExpr expr env]
   (let [field (partial field-accessor Compiler$InstanceFieldExpr)
-        target (Expr->map (field 'target expr) env)]
+        target (analysis->map (field 'target expr) env)]
     {:op :static-field
      :env (assoc env
             :line (field 'line expr))
@@ -181,9 +184,9 @@
      :tag (field 'tag expr)
      :children [target]}))
 
-(defmethod Expr->map Compiler$NewExpr
+(defmethod analysis->map Compiler$NewExpr
   [^Compiler$NewExpr expr env]
-  (let [args (doall (map Expr->map (.args expr) (repeat env)))]
+  (let [args (doall (map analysis->map (.args expr) (repeat env)))]
     {:op :new 
      :env env
      :ctor (when-let [ctor (.ctor expr)]
@@ -195,7 +198,7 @@
 
 ;; Literals
 
-(defmethod Expr->map Compiler$LiteralExpr
+(defmethod analysis->map Compiler$LiteralExpr
   [^Compiler$LiteralExpr expr env]
   (let [method (partial method-accessor Compiler$LiteralExpr)]
     {:op :literal
@@ -203,7 +206,7 @@
      :val (method 'val expr [])
      :Expr-obj expr}))
 
-(defmethod Expr->map Compiler$EmptyExpr
+(defmethod analysis->map Compiler$EmptyExpr
   [^Compiler$EmptyExpr expr env]
   {:op :empty-expr
    :env env
@@ -212,9 +215,9 @@
 
 ;; set literal
 
-(defmethod Expr->map Compiler$SetExpr
+(defmethod analysis->map Compiler$SetExpr
   [^Compiler$SetExpr expr env]
-  (let [keys (doall (map Expr->map (.keys expr) (repeat env)))]
+  (let [keys (doall (map analysis->map (.keys expr) (repeat env)))]
     {:op :set
      :env env
      :keys keys
@@ -223,9 +226,9 @@
 
 ;; vector literal
 
-(defmethod Expr->map Compiler$VectorExpr
+(defmethod analysis->map Compiler$VectorExpr
   [^Compiler$VectorExpr expr env]
-  (let [args (doall (map Expr->map (.args expr) (repeat env)))]
+  (let [args (doall (map analysis->map (.args expr) (repeat env)))]
     {:op :vector
      :env env
      :args args
@@ -234,9 +237,9 @@
 
 ;; map literal
 
-(defmethod Expr->map Compiler$MapExpr
+(defmethod analysis->map Compiler$MapExpr
   [^Compiler$MapExpr expr env]
-  (let [keyvals (doall (map Expr->map (.keyvals expr) (repeat env)))]
+  (let [keyvals (doall (map analysis->map (.keyvals expr) (repeat env)))]
     {:op :map
      :env env
      :keyvals keyvals
@@ -245,30 +248,30 @@
 
 ;; Untyped
 
-(defmethod Expr->map Compiler$MonitorEnterExpr
+(defmethod analysis->map Compiler$MonitorEnterExpr
   [^Compiler$MonitorEnterExpr expr env]
   (let [field (partial field-accessor Compiler$MonitorEnterExpr)
-        target (Expr->map (field 'target expr) env)]
+        target (analysis->map (field 'target expr) env)]
     {:op :monitor-enter
      :env env
      :target target
      :children [target]
      :Expr-obj expr}))
 
-(defmethod Expr->map Compiler$MonitorExitExpr
+(defmethod analysis->map Compiler$MonitorExitExpr
   [^Compiler$MonitorExitExpr expr env]
     (let [field (partial field-accessor Compiler$MonitorExitExpr)
-          target (Expr->map (field 'target expr) env)]
+          target (analysis->map (field 'target expr) env)]
       {:op :monitor-exit
        :env env
        :target target
        :children [target]
        :Expr-obj expr}))
 
-(defmethod Expr->map Compiler$ThrowExpr
+(defmethod analysis->map Compiler$ThrowExpr
   [^Compiler$ThrowExpr expr env]
   (let [field (partial field-accessor Compiler$ThrowExpr)
-        exception (Expr->map (field 'excExpr expr) env)]
+        exception (analysis->map (field 'excExpr expr) env)]
     {:op :throw
      :env env
      :exception exception
@@ -277,11 +280,11 @@
 
 ;; Invokes
 
-(defmethod Expr->map Compiler$InvokeExpr
+(defmethod analysis->map Compiler$InvokeExpr
   [^Compiler$InvokeExpr expr env]
   (let [field (partial field-accessor Compiler$InvokeExpr)
-        fexpr (Expr->map (field 'fexpr expr) env)
-        args (doall (map Expr->map (field 'args expr) (repeat env)))]
+        fexpr (analysis->map (field 'fexpr expr) env)
+        args (doall (map analysis->map (field 'args expr) (repeat env)))]
     (merge
      {:op :invoke
       :env (assoc env
@@ -299,10 +302,10 @@
      (when-let [m (field 'onMethod expr)]
        {:method (@#'reflect/method->map m)}))))
 
-(defmethod Expr->map Compiler$KeywordInvokeExpr
+(defmethod analysis->map Compiler$KeywordInvokeExpr
   [^Compiler$KeywordInvokeExpr expr env]
   (let [field (partial field-accessor Compiler$KeywordInvokeExpr)
-        target (Expr->map (field 'target expr) env)]
+        target (analysis->map (field 'target expr) env)]
     {:op :keyword-invoke
      :env (assoc env
             :line (field 'line expr)
@@ -315,7 +318,7 @@
 
 ;; TheVarExpr
 
-(defmethod Expr->map Compiler$TheVarExpr
+(defmethod analysis->map Compiler$TheVarExpr
   [^Compiler$TheVarExpr expr env]
   {:op :the-var
    :env env
@@ -324,7 +327,7 @@
 
 ;; VarExpr
 
-(defmethod Expr->map Compiler$VarExpr
+(defmethod analysis->map Compiler$VarExpr
   [^Compiler$VarExpr expr env]
   {:op :var
    :env env
@@ -334,7 +337,7 @@
 
 ;; UnresolvedVarExpr
 
-(defmethod Expr->map Compiler$UnresolvedVarExpr
+(defmethod analysis->map Compiler$UnresolvedVarExpr
   [^Compiler$UnresolvedVarExpr expr env]
   (let [field (partial field-accessor Compiler$UnresolvedVarExpr)]
     {:op :unresolved-var
@@ -344,7 +347,7 @@
 
 ;; ObjExprs
 
-(defmethod Expr->map Compiler$ObjExpr
+(defmethod analysis->map Compiler$ObjExpr
   [^Compiler$ObjExpr expr env]
   {:op :obj-expr
    :env env
@@ -353,54 +356,50 @@
 
 ;; FnExpr (extends ObjExpr)
 
-(defmulti ObjMethod->map (fn [& args] 
-                           (assert (= 2 (count args)))
-                           (-> args first class)))
-
-(defmethod ObjMethod->map Compiler$NewInstanceMethod 
+(defmethod analysis->map Compiler$NewInstanceMethod 
   [^Compiler$NewInstanceMethod obm env]
-  (let [body (Expr->map (.body obm) env)]
+  (let [body (analysis->map (.body obm) env)]
     {:op :new-instance-method
      :env env
      :body body
      :children [body]
      :ObjMethod-obj obm}))
 
-(defmethod ObjMethod->map Compiler$FnMethod 
+(defmethod analysis->map Compiler$FnMethod 
   [^Compiler$FnMethod obm env]
-  (let [body (Expr->map (.body obm) env)
-        required-params (doall (map LocalBinding->map (.reqParms obm) (repeat env)))]
+  (let [body (analysis->map (.body obm) env)
+        required-params (doall (map analysis->map (.reqParms obm) (repeat env)))]
     {:op :fn-method
      :env env
      :body body
      ;; Map LocalExpr@xx -> LocalExpr@xx
-     ;   :locals (map Expr->map (keys (.locals obm)) (repeat env))
+     ;   :locals (map analysis->map (keys (.locals obm)) (repeat env))
      :required-params required-params
      :rest-param (let [rest-param (.restParm obm)]
                    (if rest-param
-                     (LocalBinding->map rest-param env)
+                     (analysis->map rest-param env)
                      rest-param))
      :children [body]
      :ObjMethod-obj obm}))
 
-(defmethod Expr->map Compiler$FnExpr
+(defmethod analysis->map Compiler$FnExpr
   [^Compiler$FnExpr expr env]
-  (let [methods (doall (map ObjMethod->map (.methods expr) (repeat env)))]
+  (let [methods (doall (map analysis->map (.methods expr) (repeat env)))]
     {:op :fn-expr
      :env env
      :methods methods
      :variadic-method (when-let [variadic-method (.variadicMethod expr)]
-                        (ObjMethod->map variadic-method env))
+                        (analysis->map variadic-method env))
      :tag (.tag expr)
      :children methods
      :Expr-obj expr}))
 
 ;; NewInstanceExpr
 
-(defmethod Expr->map Compiler$NewInstanceExpr
+(defmethod analysis->map Compiler$NewInstanceExpr
   [^Compiler$NewInstanceExpr expr env]
   (let [field (partial field-accessor Compiler$NewInstanceExpr)
-        methods (doall (map ObjMethod->map (field 'methods expr) (repeat env)))]
+        methods (doall (map analysis->map (field 'methods expr) (repeat env)))]
     {:op :new-instance-expr
      :env env
      :methods methods
@@ -412,10 +411,10 @@
 
 ;; InstanceOfExpr
 
-(defmethod Expr->map Compiler$InstanceOfExpr
+(defmethod analysis->map Compiler$InstanceOfExpr
   [^Compiler$InstanceOfExpr expr env]
   (let [field (partial field-accessor Compiler$InstanceOfExpr)
-        exp (Expr->map (field 'expr expr) env)]
+        exp (analysis->map (field 'expr expr) env)]
     {:op :instance-of
      :class (field 'c expr)
      :the-expr exp
@@ -424,10 +423,10 @@
 
 ;; MetaExpr
 
-(defmethod Expr->map Compiler$MetaExpr
+(defmethod analysis->map Compiler$MetaExpr
   [^Compiler$MetaExpr expr env]
-  (let [meta (Expr->map (.meta expr) env)
-        the-expr (Expr->map (.expr expr) env)]
+  (let [meta (analysis->map (.meta expr) env)
+        the-expr (analysis->map (.expr expr) env)]
     {:op :meta
      :env env
      :meta meta
@@ -437,9 +436,9 @@
 
 ;; do
 
-(defmethod Expr->map Compiler$BodyExpr
+(defmethod analysis->map Compiler$BodyExpr
   [^Compiler$BodyExpr expr env]
-  (let [exprs (doall (map Expr->map (.exprs expr) (repeat env)))]
+  (let [exprs (doall (map analysis->map (.exprs expr) (repeat env)))]
     {:op :do
      :env env
      :exprs exprs
@@ -448,11 +447,11 @@
 
 ;; if
 
-(defmethod Expr->map Compiler$IfExpr
+(defmethod analysis->map Compiler$IfExpr
   [^Compiler$IfExpr expr env]
-  (let [test (Expr->map (.testExpr expr) env)
-        then (Expr->map (.thenExpr expr) env)
-        else (Expr->map (.elseExpr expr) env)]
+  (let [test (analysis->map (.testExpr expr) env)
+        then (analysis->map (.thenExpr expr) env)
+        else (analysis->map (.elseExpr expr) env)]
     {:op :if
      :env (assoc env
                  :line (.line expr))
@@ -464,12 +463,12 @@
 
 ;; case
 
-(defmethod Expr->map Compiler$CaseExpr
+(defmethod analysis->map Compiler$CaseExpr
   [^Compiler$CaseExpr expr env]
-  (let [the-expr (Expr->map (.expr expr) env)
-        tests (doall (map Expr->map (vals (.tests expr)) (repeat env)))
-        thens (doall (map Expr->map (vals (.thens expr)) (repeat env)))
-        default (Expr->map (.defaultExpr expr) env)]
+  (let [the-expr (analysis->map (.expr expr) env)
+        tests (doall (map analysis->map (vals (.tests expr)) (repeat env)))
+        thens (doall (map analysis->map (vals (.thens expr)) (repeat env)))
+        default (analysis->map (.defaultExpr expr) env)]
     {:op :case*
      :the-expr the-expr
      :tests tests
@@ -481,7 +480,7 @@
 
 ;; ImportExpr
 
-(defmethod Expr->map Compiler$ImportExpr
+(defmethod analysis->map Compiler$ImportExpr
   [^Compiler$ImportExpr expr env]
   {:op :import*
    :env env
@@ -490,10 +489,10 @@
 
 ;; AssignExpr (set!)
 
-(defmethod Expr->map Compiler$AssignExpr
+(defmethod analysis->map Compiler$AssignExpr
   [^Compiler$AssignExpr expr env]
-  (let [target (Expr->map (.target expr) env)
-        val (Expr->map (.val expr) env)]
+  (let [target (analysis->map (.target expr) env)
+        val (analysis->map (.val expr) env)]
     {:op :set!
      :env env
      :target target
@@ -503,9 +502,10 @@
 
 ;; TryExpr
 
-(defn CatchClause->map [^Compiler$TryExpr$CatchClause ctch env]
-  (let [local-binding (LocalBinding->map (.lb ctch) env)
-        handler (Expr->map (.handler ctch) env)]
+(defmethod analysis->map Compiler$TryExpr$CatchClause
+  [^Compiler$TryExpr$CatchClause ctch env]
+  (let [local-binding (analysis->map (.lb ctch) env)
+        handler (analysis->map (.handler ctch) env)]
     {:op :catch
      :env env
      :class (.c ctch)
@@ -514,12 +514,12 @@
      :children [local-binding handler]
      :CatchClause-obj ctch}))
 
-(defmethod Expr->map Compiler$TryExpr
+(defmethod analysis->map Compiler$TryExpr
   [^Compiler$TryExpr expr env]
-  (let [try-expr (Expr->map (.tryExpr expr) env)
+  (let [try-expr (analysis->map (.tryExpr expr) env)
         finally-expr (when-let [finally-expr (.finallyExpr expr)]
-                       (Expr->map finally-expr env))
-        catch-exprs (doall (map CatchClause->map (.catchExprs expr) (repeat env)))]
+                       (analysis->map finally-expr env))
+        catch-exprs (doall (map analysis->map (.catchExprs expr) (repeat env)))]
     {:op :try
      :env env
      :try-expr try-expr
@@ -532,11 +532,11 @@
 
 ;; RecurExpr
 
-(defmethod Expr->map Compiler$RecurExpr
+(defmethod analysis->map Compiler$RecurExpr
   [^Compiler$RecurExpr expr env]
   (let [field (partial field-accessor Compiler$RecurExpr)
-        loop-locals (doall (map LocalBinding->map (.loopLocals expr) (repeat env)))
-        args (doall (map Expr->map (.args expr) (repeat env)))]
+        loop-locals (doall (map analysis->map (.loopLocals expr) (repeat env)))
+        args (doall (map analysis->map (.args expr) (repeat env)))]
     {:op :recur
      :env (assoc env
             :line (field 'line expr)
@@ -546,7 +546,7 @@
      :children (concat loop-locals args)
      :Expr-obj expr}))
 
-(defmethod Expr->map Compiler$MethodParamExpr
+(defmethod analysis->map Compiler$MethodParamExpr
   [expr env]
   (let [field (partial field-accessor Compiler$MethodParamExpr)
         method (partial method-accessor Compiler$MethodParamExpr)]
@@ -557,13 +557,10 @@
      :children []
      :Expr-obj expr}))
 
-(defmethod Expr->map :default
-  [expr & args]
-  (println expr)
-  (throw (Exception. (str "No method in multimethod 'Expr->map' for dispatch value: " (class expr)))))
 
-
-(defn- analyze* [env form]
+(defn- analyze* 
+  "Don't call directly without rebinding *ns*"
+  [env form]
   (letfn [(invoke-analyze [context form]
             (push-thread-bindings {Compiler/LOADER (RT/makeClassLoader)})
             (try
@@ -579,9 +576,11 @@
                   (invoke-analyze context form)
                   (catch RuntimeException e
                     (throw (repl/root-cause e))))]
-      (Expr->map exprs (merge-with conj (dissoc env :context) {:locals {}})))))
+      (analysis->map exprs (merge-with conj (dissoc env :context) {:locals {}})))))
 
-(defn analyze-one [env form]
+(defn analyze-one 
+  "Analyze a single form"
+  [env form]
   (binding [*ns* (find-ns (-> env :ns :name))]
     (analyze* env form)))
 
