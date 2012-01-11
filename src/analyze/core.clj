@@ -32,8 +32,7 @@
     (.invoke method obj (object-array args))))
 
 (defmulti Expr->map (fn Expr->map [& args]
-                      (assert (re-find #"Expr" (.getSimpleName (class (first args)))))
-                      (assert (= 2 (count args)))
+                      (assert (<= 2 (count args)))
                       (-> args first class)))
 
 ;; def
@@ -563,12 +562,6 @@
   (println expr)
   (throw (Exception. (str "No method in multimethod 'Expr->map' for dispatch value: " (class expr)))))
 
-
-(defn wall-hack-method [class-name method-name types obj & args]
-  (-> class-name (.getDeclaredMethod (name method-name)
-                                     (into-array Class (seq types)))
-    (doto (.setAccessible true))
-    (.invoke obj (into-array Object args))))
 
 (defn- analyze* [env form]
   (letfn [(invoke-analyze [context form]
