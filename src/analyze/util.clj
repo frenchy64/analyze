@@ -1,19 +1,18 @@
 (ns analyze.util
   (:require [clojure.pprint :as pp]))
 
-(defn- dissoc-rec
-  "dissoc[iate] keys recursively."
-  [m k]
-  (into {}
-        (for [[key val] (dissoc m k)]
-          [key (if (map? val)
-                 (dissoc-rec val k)
-                 val)])))
+(defn- dissoc-rec [obj & keys]
+  (cond
+   (map? obj) (into {} (for [[key val] (apply dissoc obj keys)]
+                         [key (apply dissoc-rec val keys)]))
+   (sequential? obj) (map #(apply dissoc-rec % keys) obj)
+   :else obj))
 
 (defn print-expr
-  "Pretty-prints expr, without :children keys"
-  [expr]
-  (pp/pprint (dissoc-rec expr :children)))
+  "Pretty-prints expr, excluding supplied keys.
+  Example: (print-expr expr :children :env)"
+  [expr & exclusions]
+  (pp/pprint (apply dissoc-rec expr exclusions)))
 
 (defn expr-seq
   "Given an expression, returns a lazy sequence of the expressions
