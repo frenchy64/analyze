@@ -89,6 +89,7 @@
      :env env
      :binding-inits bindings
      :body body
+     :is-loop (.isLoop expr)
      :children (conj bindings body)
      :Expr-obj expr}))
 
