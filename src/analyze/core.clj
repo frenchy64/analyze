@@ -141,7 +141,7 @@
 (defmethod analysis->map Compiler$InstanceMethodExpr
   [^Compiler$InstanceMethodExpr expr env]
   (let [field (partial field-accessor Compiler$InstanceMethodExpr)
-        target (field 'target expr)
+        target (analysis->map (field 'target expr) env)
         args (doall (map analysis->map (field 'args expr) (repeat env)))]
     {:op :instance-method 
      :env (assoc env
