@@ -87,7 +87,7 @@
                    vec)]
     {:op :let
      :env env
-     :bindings bindings
+     :binding-inits bindings
      :body body
      :children (conj bindings body)
      :Expr-obj expr}))
