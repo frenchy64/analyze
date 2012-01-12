@@ -1,4 +1,4 @@
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 (ns analyze.core
   "Interface to Compiler's analyze.
