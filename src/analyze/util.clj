@@ -21,3 +21,13 @@
   (tree-seq #(-> % :children boolean)
             :children
             expr))
+
+(comment
+(use 'analyze.core)
+(print-expr 
+  (analyze-one {:ns {:name 'clojure.core} :context :eval} 
+               '(defn a 
+                  ([^bytes b] ^Integer b)
+                  ([b c] c)))
+  :children :Expr-obj :ObjMethod-obj :LocalBinding-obj :env :BindingInit-obj)
+  )
