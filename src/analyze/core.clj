@@ -141,18 +141,19 @@
 (defmethod analysis->map Compiler$InstanceMethodExpr
   [^Compiler$InstanceMethodExpr expr env]
   (let [field (partial field-accessor Compiler$InstanceMethodExpr)
+        target (analysis->map (field 'target expr) env)
         args (doall (map analysis->map (field 'args expr) (repeat env)))]
     {:op :instance-method 
      :env (assoc env
             :source (field 'source expr)
             :line (field 'line expr))
-     :target (field 'target expr)
+     :target target
      :method-name (field 'methodName expr)
      :method (when-let [method (field 'method expr)]
                (@#'reflect/method->map method))
      :args args
      :tag (field 'tag expr)
-     :children args
+     :children (cons target args)
      :Expr-obj expr}))
 
 ;; Fields
@@ -174,7 +175,7 @@
   [^Compiler$InstanceFieldExpr expr env]
   (let [field (partial field-accessor Compiler$InstanceFieldExpr)
         target (analysis->map (field 'target expr) env)]
-    {:op :static-field
+    {:op :instance-field
      :env (assoc env
             :line (field 'line expr))
      :target target
@@ -183,7 +184,8 @@
               (@#'reflect/field->map field))
      :field-name (field 'fieldName expr)
      :tag (field 'tag expr)
-     :children [target]}))
+     :children [target]
+     :Expr-obj expr}))
 
 (defmethod analysis->map Compiler$NewExpr
   [^Compiler$NewExpr expr env]
