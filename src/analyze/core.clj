@@ -83,11 +83,11 @@
 (defmethod analysis->map Compiler$LetExpr
   [^Compiler$LetExpr expr env]
   (let [body (analysis->map (.body expr) env)
-        bindings (-> (doall (map analysis->map (.bindingInits expr) (repeat env)))
-                   vec)]
+        bindings-inits (-> (doall (map analysis->map (.bindingInits expr) (repeat env)))
+                         vec)]
     {:op :let
      :env env
-     :binding-inits bindings
+     :binding-inits binding-inits
      :body body
      :is-loop (.isLoop expr)
      :children (conj bindings body)
