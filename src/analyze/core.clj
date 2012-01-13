@@ -184,7 +184,8 @@
               (@#'reflect/field->map field))
      :field-name (field 'fieldName expr)
      :tag (field 'tag expr)
-     :children [target]}))
+     :children [target]
+     :Expr-obj expr}))
 
 (defmethod analysis->map Compiler$NewExpr
   [^Compiler$NewExpr expr env]
