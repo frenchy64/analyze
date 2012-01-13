@@ -175,7 +175,7 @@
   [^Compiler$InstanceFieldExpr expr env]
   (let [field (partial field-accessor Compiler$InstanceFieldExpr)
         target (analysis->map (field 'target expr) env)]
-    {:op :static-field
+    {:op :instance-field
      :env (assoc env
             :line (field 'line expr))
      :target target
