@@ -55,13 +55,11 @@
          ["clojure/template.clj" clojure.template]]))
 
 (doseq [exprs analyzed
-        exp (filter #(or (= (:op %) :def) (= (:op %) :fn-expr)) exprs)]
+        exp (filter (comp #{:def :fn-expr} :op) exprs)]
   (if (tail-recursive? exp)
     (println "WARNING: possible tail recursive function not using recur"
              (or (-> exp :name)
                  (-> exp :var)))))
-
-
 
 (comment
   (require 'clojure.pprint)
