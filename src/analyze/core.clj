@@ -394,6 +394,7 @@
      :variadic-method (when-let [variadic-method (.variadicMethod expr)]
                         (analysis->map variadic-method env))
      :tag (.tag expr)
+     :name (symbol (or (.thisName expr) ""))
      :children methods
      :Expr-obj expr}))
 
