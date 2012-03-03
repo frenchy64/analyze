@@ -388,15 +388,17 @@
 (defmethod analysis->map Compiler$FnExpr
   [^Compiler$FnExpr expr env]
   (let [methods (doall (map analysis->map (.methods expr) (repeat env)))]
-    {:op :fn-expr
-     :env env
-     :methods methods
-     :variadic-method (when-let [variadic-method (.variadicMethod expr)]
-                        (analysis->map variadic-method env))
-     :tag (.tag expr)
-     :name (symbol (or (.thisName expr) ""))
-     :children methods
-     :Expr-obj expr}))
+    (merge
+      {:op :fn-expr
+       :env env
+       :methods methods
+       :variadic-method (when-let [variadic-method (.variadicMethod expr)]
+                          (analysis->map variadic-method env))
+       :tag (.tag expr)
+       :children methods
+       :Expr-obj expr}
+      (when-let [nme (.thisName expr)]
+        {:name (symbol nme)}))))
 
 ;; NewInstanceExpr
 
