@@ -406,7 +406,7 @@
   [^Compiler$NewInstanceExpr expr env]
   (let [field (partial field-accessor Compiler$NewInstanceExpr)
         methods (doall (map analysis->map (field 'methods expr) (repeat env)))]
-    {:op :new-instance-expr
+    {:op :deftype*
      :env env
      :methods methods
      :mmap (field 'mmap expr)
