@@ -202,53 +202,23 @@
 
 ;; Literals extending abstract class Compiler$LiteralExpr
 
-(defmethod analysis->map Compiler$KeywordExpr
-  [^Compiler$KeywordExpr expr env]
-  (let [method (partial method-accessor Compiler$KeywordExpr)]
-    {:op :keyword
-     :env env
-     :val (method 'val expr [])
-     :Expr-obj expr}))
+(defmacro literal-dispatch [disp-class op-keyword]
+  `(defmethod analysis->map ~disp-class
+     [expr# env#]
+     (let [method# (partial method-accessor ~disp-class)]
+       {:op ~op-keyword
+        :env env#
+        :val (method# '~'val expr# [])
+        :Expr-obj expr#})))
 
-(defmethod analysis->map Compiler$ConstantExpr
-  [^Compiler$ConstantExpr expr env]
-  (let [method (partial method-accessor Compiler$ConstantExpr)]
-    {:op :constant
-     :env env
-     :val (method 'val expr [])
-     :Expr-obj expr}))
+(literal-dispatch Compiler$KeywordExpr :keyword)
+(literal-dispatch Compiler$ConstantExpr :constant)
+(literal-dispatch Compiler$NumberExpr :number)
+(literal-dispatch Compiler$NilExpr :nil)
+(literal-dispatch Compiler$StringExpr :string)
+(literal-dispatch Compiler$BooleanExpr :boolean)
 
-(defmethod analysis->map Compiler$NumberExpr
-  [^Compiler$NumberExpr expr env]
-  (let [method (partial method-accessor Compiler$NumberExpr)]
-    {:op :number
-     :env env
-     :val (method 'val expr [])
-     :Expr-obj expr}))
-
-(defmethod analysis->map Compiler$NilExpr
-  [^Compiler$NilExpr expr env]
-  (let [method (partial method-accessor Compiler$NilExpr)]
-    {:op :nil
-     :env env
-     :val (method 'val expr [])
-     :Expr-obj expr}))
-
-(defmethod analysis->map Compiler$StringExpr
-  [^Compiler$StringExpr expr env]
-  (let [method (partial method-accessor Compiler$StringExpr)]
-    {:op :nil
-     :env env
-     :val (method 'val expr [])
-     :Expr-obj expr}))
-
-(defmethod analysis->map Compiler$BooleanExpr
-  [^Compiler$BooleanExpr expr env]
-  (let [method (partial method-accessor Compiler$BooleanExpr)]
-    {:op :boolean
-     :env env
-     :val (method 'val expr [])
-     :Expr-obj expr}))
+;; empty collections
 
 (defmethod analysis->map Compiler$EmptyExpr
   [^Compiler$EmptyExpr expr env]
