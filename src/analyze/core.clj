@@ -207,7 +207,7 @@
   (let [method (partial method-accessor Compiler$KeywordExpr)]
     {:op :keyword
      :env env
-     :the-keyword (method 'val expr [])
+     :val (method 'val expr [])
      :Expr-obj expr}))
 
 (defmethod analysis->map Compiler$ConstantExpr
@@ -223,7 +223,7 @@
   (let [method (partial method-accessor Compiler$NumberExpr)]
     {:op :number
      :env env
-     :the-number (method 'val expr [])
+     :val (method 'val expr [])
      :Expr-obj expr}))
 
 (defmethod analysis->map Compiler$NilExpr
@@ -239,7 +239,7 @@
   (let [method (partial method-accessor Compiler$StringExpr)]
     {:op :nil
      :env env
-     :the-string (method 'val expr [])
+     :val (method 'val expr [])
      :Expr-obj expr}))
 
 (defmethod analysis->map Compiler$BooleanExpr
@@ -247,7 +247,7 @@
   (let [method (partial method-accessor Compiler$BooleanExpr)]
     {:op :boolean
      :env env
-     :the-boolean (method 'val expr [])
+     :val (method 'val expr [])
      :Expr-obj expr}))
 
 (defmethod analysis->map Compiler$EmptyExpr
