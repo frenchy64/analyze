@@ -18,15 +18,15 @@
   "Given an expression, returns a lazy sequence of the expressions
   followed by its children (in a depth first manner)"
   [expr]
-  (tree-seq #(-> % :children boolean)
+  (tree-seq :children
             :children
             expr))
 
 (comment
 (use 'analyze.core)
-(print-expr 
-  (analyze-one {:ns {:name 'clojure.core} :context :eval} 
-               '(defn a 
+(print-expr
+  (analyze-one {:ns {:name 'clojure.core} :context :eval}
+               '(defn a
                   ([^bytes b] ^Integer b)
                   ([b c] c)))
   :children :Expr-obj :ObjMethod-obj :LocalBinding-obj :env :BindingInit-obj)
