@@ -41,7 +41,7 @@
 (defmacro literal-dispatch [disp-class op-keyword]
   `(extend-protocol AnalysisToMap
      ~disp-class
-     (analysis->map
+     (~'analysis->map
        [expr# env#]
        (let [method# (partial method-accessor ~disp-class)]
          {:op ~op-keyword
@@ -532,7 +532,7 @@
   ;;TryExpr
   Compiler$TryExpr$CatchClause
   (analysis->map
-    [CatchClause ctch env]
+    [ctch env]
     (let [local-binding (analysis->map (.lb ctch) env)
           handler (analysis->map (.handler ctch) env)]
       {:op :catch
