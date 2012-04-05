@@ -16,10 +16,6 @@ Current version: 0.1.2
 
 https://clojars.org/analyze
 
-# Progress
-
-See [http://dev.clojure.org/pages/viewpage.action?pageId=4063367]
-
 # Todo
 
 - work out how to analyze a leiningen `project.clj` file
@@ -29,6 +25,7 @@ See [http://dev.clojure.org/pages/viewpage.action?pageId=4063367]
 - try evaling the Expr forms returned by the analyzer and see what happens
 - Review SOURCE var
 - use :locals if necessary
+- should we clump all literals into :op :literal ?
 
 # Examples
 

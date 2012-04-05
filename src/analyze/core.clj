@@ -6,13 +6,14 @@
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
            (clojure.lang RT Compiler$DefExpr Compiler$LocalBinding Compiler$BindingInit Compiler$LetExpr
                          Compiler$LetFnExpr Compiler$StaticMethodExpr Compiler$InstanceMethodExpr Compiler$StaticFieldExpr
-                         Compiler$NewExpr Compiler$LiteralExpr Compiler$EmptyExpr Compiler$VectorExpr Compiler$MonitorEnterExpr
+                         Compiler$NewExpr Compiler$EmptyExpr Compiler$VectorExpr Compiler$MonitorEnterExpr
                          Compiler$MonitorExitExpr Compiler$ThrowExpr Compiler$InvokeExpr Compiler$TheVarExpr Compiler$VarExpr
                          Compiler$UnresolvedVarExpr Compiler$ObjExpr Compiler$NewInstanceMethod Compiler$FnMethod Compiler$FnExpr
                          Compiler$NewInstanceExpr Compiler$MetaExpr Compiler$BodyExpr Compiler$ImportExpr Compiler$AssignExpr
                          Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr Compiler$RecurExpr
                          Compiler$MapExpr Compiler$IfExpr Compiler$KeywordInvokeExpr Compiler$InstanceFieldExpr Compiler$InstanceOfExpr
-                         Compiler$CaseExpr Compiler$Expr Compiler$SetExpr Compiler$MethodParamExpr))
+                         Compiler$CaseExpr Compiler$Expr Compiler$SetExpr Compiler$MethodParamExpr Compiler$KeywordExpr
+                         Compiler$ConstantExpr Compiler$NumberExpr Compiler$NilExpr Compiler$BooleanExpr Compiler$StringExpr))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
             [clojure.repl :as repl]
@@ -34,6 +35,26 @@
 (defprotocol AnalysisToMap
   (analysis->map [aobj env]
     "Recursively converts the output of the Compiler's analysis to a map"))
+
+;; Literals extending abstract class Compiler$LiteralExpr
+
+(defmacro literal-dispatch [disp-class op-keyword]
+  `(extend-protocol AnalysisToMap
+     ~disp-class
+     (analysis->map
+       [expr# env#]
+       (let [method# (partial method-accessor ~disp-class)]
+         {:op ~op-keyword
+          :env env#
+          :val (method# '~'val expr# [])
+          :Expr-obj expr#}))))
+
+(literal-dispatch Compiler$KeywordExpr :keyword)
+(literal-dispatch Compiler$ConstantExpr :constant)
+(literal-dispatch Compiler$NumberExpr :number)
+(literal-dispatch Compiler$NilExpr :nil)
+(literal-dispatch Compiler$StringExpr :string)
+(literal-dispatch Compiler$BooleanExpr :boolean)
 
 (extend-protocol AnalysisToMap
 
@@ -203,16 +224,6 @@
        :class (.c expr)
        :args args
        :children args
-       :Expr-obj expr}))
-
-  ;; Literals
-  Compiler$LiteralExpr
-  (analysis->map
-    [expr env]
-    (let [method (partial method-accessor Compiler$LiteralExpr)]
-      {:op :literal
-       :env env
-       :val (method 'val expr [])
        :Expr-obj expr}))
 
   Compiler$EmptyExpr
@@ -626,6 +637,9 @@
                    (analyze* env %))]
         (binding [*ns* (find-ns ns)]
           (doall (map afn frms)))))))
+
+(defmacro ast [form]
+  `(analyze-one {:ns {:name (ns-name *ns*)} :context :eval} '~form))
 
 (comment
 (analyze-one {:ns {:name 'clojure.core} :context :eval} '(try (throw (Exception.)) (catch Exception e (throw e)) (finally 33)))
