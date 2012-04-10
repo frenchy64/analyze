@@ -26,7 +26,7 @@
 (def ^:private dissoc-keys
   #{:children :Expr-obj :LocalBinding-obj :BindingInit-obj :ObjMethod-obj})
 
-(defn- prep-ast [expr]
+(defn prep-ast [expr]
   (apply util/dissoc-rec expr dissoc-keys))
 
 (defmacro ast 
