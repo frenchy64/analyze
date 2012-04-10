@@ -14,21 +14,17 @@
   "Returns a list of the function calls that are in tail position."
   [tree]
   (case (:op tree)
-    :def
-    (safe-mapcat find-tail-ops (rest (:children tree)))
-    :do
-    (recur (last (:children tree)))
-    :fn-expr
-    (safe-mapcat find-tail-ops (:methods tree))
-    :fn-method
-    (recur (:body tree))
+    :def (safe-mapcat find-tail-ops (rest (:children tree)))
+    :do (recur (last (:children tree)))
+    :fn-expr (safe-mapcat find-tail-ops (:methods tree))
+    :fn-method (recur (:body tree))
+
     :invoke
     (or (-> tree :fexpr :local-binding :sym)
         (-> tree :fexpr :var))
-    :let
-    (recur (:body tree))
-    :if
-    (map find-tail-ops [(:then tree) (:else tree)])
+
+    :let (recur (:body tree))
+    :if (map find-tail-ops [(:then tree) (:else tree)])
     nil))
 
 (defn tail-recursive?
@@ -42,17 +38,18 @@
     (boolean (when fn-name (some (partial = fn-name) tail-ops)))))
 
 (def analyzed
-  (map #(apply analyze/analyze-path %)
-       '[["clojure/test.clj" clojure.test]
-         ["clojure/set.clj" clojure.set]
-         ["clojure/java/io.clj" clojure.java.io]
-         ["clojure/stacktrace.clj" clojure.stacktrace]
-         ["clojure/pprint.clj" clojure.pprint]
-         ["clojure/walk.clj" clojure.walk]
-         ["clojure/string.clj" clojure.string]
-         ["clojure/repl.clj" clojure.repl]
-         ["clojure/core/protocols.clj" clojure.core.protocols]
-         ["clojure/template.clj" clojure.template]]))
+  (binding [analyze/*children* true]
+    (doall (map #(apply analyze/analyze-path %)
+                '[["clojure/test.clj" clojure.test]
+                  ["clojure/set.clj" clojure.set]
+                  ["clojure/java/io.clj" clojure.java.io]
+                  ["clojure/stacktrace.clj" clojure.stacktrace]
+                  ["clojure/pprint.clj" clojure.pprint]
+                  ["clojure/walk.clj" clojure.walk]
+                  ["clojure/string.clj" clojure.string]
+                  ["clojure/repl.clj" clojure.repl]
+                  ["clojure/core/protocols.clj" clojure.core.protocols]
+                  ["clojure/template.clj" clojure.template]]))))
 
 (doseq [exprs analyzed
         exp (filter (comp #{:def :fn-expr} :op) exprs)]

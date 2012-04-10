@@ -12,13 +12,81 @@ http://clojure.org/contributing
 
 # Usage
 
+```clojure
+
+analyze.core=> (ast [1])
+{:op :constant, :env {:locals {}, :ns {:name analyze.core}}, :val [1]}
+
+analyze.core=> (-> (ast (if true 1 2)) clojure.pprint/pprint)
+{:op :if,
+ :env {:line 5, :locals {}, :ns {:name analyze.core}},
+ :test
+ {:op :boolean,
+  :env {:locals {}, :ns {:name analyze.core}},
+  :val true},
+ :then
+ {:op :number, :env {:locals {}, :ns {:name analyze.core}}, :val 1},
+ :else
+ {:op :number, :env {:locals {}, :ns {:name analyze.core}}, :val 2}}
+nil
+
+analyze.core=> (-> (ast (fn [x] (+ x 1))) clojure.pprint/pprint)
+{:op :fn-expr,
+ :env {:locals {}, :ns {:name analyze.core}},
+ :methods
+ ({:op :fn-method,
+   :env {:locals {}, :ns {:name analyze.core}},
+   :body
+   {:op :do,
+    :env {:locals {}, :ns {:name analyze.core}},
+    :exprs
+    ({:op :static-method,
+      :env
+      {:line 6, :source "REPL", :locals {}, :ns {:name analyze.core}},
+      :class clojure.lang.Numbers,
+      :method-name "add",
+      :method
+      {:name add,
+       :return-type java.lang.Number,
+       :declaring-class clojure.lang.Numbers,
+       :parameter-types [java.lang.Object long],
+       :exception-types [],
+       :flags #{:static :public}},
+      :args
+      ({:op :local-binding-expr,
+        :env {:locals {}, :ns {:name analyze.core}},
+        :local-binding
+        {:op :local-binding,
+         :env {:locals {}, :ns {:name analyze.core}},
+         :sym x,
+         :tag nil,
+         :init nil},
+        :tag nil}
+       {:op :number,
+        :env {:locals {}, :ns {:name analyze.core}},
+        :val 1}),
+      :tag nil})},
+   :required-params
+   ({:op :local-binding,
+     :env {:locals {}, :ns {:name analyze.core}},
+     :sym x,
+     :tag nil,
+     :init nil}),
+   :rest-param nil}),
+ :variadic-method nil,
+ :tag nil}
+nil
+```
+
+# Download
+
 https://clojars.org/analyze
 
 Current version: 0.1.4
 
 # Todo
 
-- work out how to analyze a leiningen `project.clj` file
+- analyze a leiningen `project.clj` file
 - analyze `clojure.core`
 - does each expression have a line number attached?
 - try evaling the Expr forms returned by the analyzer and see what happens
@@ -27,63 +95,4 @@ Current version: 0.1.4
 
 # Examples
 
-## General Usage
-
-This library takes a form, and some environment information, then passes it to the Compiler's analysis phase.
-
-We then recursively convert the Java objects returned by the Compiler into maps, with :op and :env keys.
-The actual keys that get converted are easy to check, just search the source at `analyze.core`, using the :op 
-keys as reference.
-
-This is kind of rich information the analyzer can derive from expressions.
-
-```
-(Integer. 2)
-```
-
-expands to:
-
-```
-{:op :new,
- :env {:locals {}, :ns {:name clojure.core}},
- :ctor
- {:name java.lang.Integer,
-  :declaring-class java.lang.Integer,
-  :parameter-types [int],
-  :exception-types [],
-  :flags #{:public}},
- :class java.lang.Integer,
- :args
- ({:op :literal,
-   :env {:locals {}, :ns {:name clojure.core}},
-   :val 2,
-   :Expr-obj #<NumberExpr clojure.lang.Compiler$NumberExpr@17bf874>}),
- :children
- ({:op :literal,
-   :env {:locals {}, :ns {:name clojure.core}},
-   :val 2,
-   :Expr-obj #<NumberExpr clojure.lang.Compiler$NumberExpr@17bf874>}),
- :Expr-obj #<NewExpr clojure.lang.Compiler$NewExpr@3dbe0>}
-```
-
-## Check for incorrectly placed docstrings
-
-```
-(defn myfn [a]
-  "This is a fn"
-  (doseq [a [1 2 3]
-    (+ a (inc a))))
-```
-
-Surely a beginner mistake, right?
-
-Run the checker in `analyze.examples.docstrings` to find out. :)
-
-## Check for side-effects in transactions
-
-```
-(dosync
-  (set! *ns* 'myns))
-```
-
-Test the checkers by running `analyze.examples.side-effects`
+See `analyze.examples.*` namespaces.

@@ -1,7 +1,7 @@
 (ns analyze.util
   (:require [clojure.pprint :as pp]))
 
-(defn dissoc-rec 
+(defn- dissoc-rec 
   "Return expr with the keys dissociated"
   [obj & keys]
   (cond
@@ -9,9 +9,6 @@
                          [key (apply dissoc-rec val keys)]))
    (sequential? obj) (map #(apply dissoc-rec % keys) obj)
    :else obj))
-
-(defn dissoc-children [expr]
-  (dissoc-rec expr :children))
 
 (defn print-expr
   "Pretty-prints expr, excluding supplied keys.
