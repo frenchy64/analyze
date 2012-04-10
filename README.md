@@ -12,7 +12,7 @@ http://clojure.org/contributing
 
 # Download
 
-Current version: 0.1.2
+Current version: 0.1.3
 
 https://clojars.org/analyze
 
@@ -20,12 +20,10 @@ https://clojars.org/analyze
 
 - work out how to analyze a leiningen `project.clj` file
 - analyze `clojure.core`
-- get rid of requirement to provide namespace
 - does each expression have a line number attached?
 - try evaling the Expr forms returned by the analyzer and see what happens
 - Review SOURCE var
 - use :locals if necessary
-- should we clump all literals into :op :literal ?
 
 # Examples
 
