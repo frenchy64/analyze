@@ -10,11 +10,11 @@ Pull requests accepted from registered Clojure contributers
 
 http://clojure.org/contributing
 
-# Download
-
-Current version: 0.1.3
+# Usage
 
 https://clojars.org/analyze
+
+Current version: 0.1.4
 
 # Todo
 
