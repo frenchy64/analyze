@@ -82,7 +82,7 @@ nil
 
 https://clojars.org/analyze
 
-Current version: 0.1.4
+Current version: 0.1.5
 
 # Todo
 
