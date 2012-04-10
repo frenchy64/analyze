@@ -17,7 +17,33 @@
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
             [clojure.repl :as repl]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [analyze.util :as util]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; Debugging
+
+(def ^:private dissoc-keys
+  #{:children :Expr-obj :LocalBinding-obj :BindingInit-obj :ObjMethod-obj})
+
+(defn- prep-ast [expr]
+  (apply util/dissoc-rec expr dissoc-keys))
+
+(defmacro ast 
+  "Returns the abstract syntax tree representation of the given form"
+  [form]
+  `(-> (analyze-one {:ns {:name (ns-name *ns*)} :context :eval} '~form)
+     prep-ast))
+
+(defmacro ast-in-ns
+  "Returns the abstract syntax tree representation of the given form,
+  evaluated in the given namespace"
+  [nsym form]
+  `(-> (analyze-one {:ns {:name '~nsym} :context :eval} '~form)
+     prep-ast))
+
+;;;;;;;;;;;;;;;;;;;;;;;
+;; Utils
 
 (defn- field-accessor [class-obj field obj]
   (let [field (.getDeclaredField class-obj (name field))]
@@ -638,40 +664,25 @@
         (binding [*ns* (find-ns ns)]
           (doall (map afn frms)))))))
 
-(defmacro ast [form]
-  `(analyze-one {:ns {:name (ns-name *ns*)} :context :eval} '~form))
-
 (comment
-(analyze-one {:ns {:name 'clojure.core} :context :eval} '(try (throw (Exception.)) (catch Exception e (throw e)) (finally 33)))
-(analyze-one {:ns {:name 'clojure.core} :context :eval} '(try ))
+  (ast 
+    (try (throw (Exception.)) 
+      (catch Exception e (throw e)) 
+      (finally 33)))
 
-;; Expecting more output from things like :fn-method
-(analyze-one {:ns {:name 'clojure.core} :context :eval} '(try (println 1 23) (throw (Exception.)) (catch Exception e (throw e)) ))
+  ;; Expecting more output from things like :fn-method
+  (ast
+    (try (println 1 23) 
+      (throw (Exception.)) 
+      (catch Exception e (throw e))))
 
-(analyze-one {:ns {:name 'clojure.core} :context :eval} '(let [b 1] (fn [& a] 1)))
+  (ast
+    (let [b 1] 
+      (fn [& a] 1)))
 
-(analyze-one {:ns {:name 'clojure.core} :context :eval} '(Integer. (+ 1 1)))
-(analyze-one {:ns {:name 'clojure.core} :context :eval} '(Integer. (+ 1 1)))
+  (ast (Integer. (+ 1 1)))
+  (ast (Integer. (+ 1 1)))
 
-(analyze-one {:ns {:name 'clojure.core} :context :eval} '(map io/file [1 2]))
+  (ast (map io/file [1 2]))
 
-  )
-
-(comment
-
-(def docm
-  (analyze-one {:ns {:name 'clojure.repl} :context :eval}
-    '(defn doc
-      [name]
-      "Prints documentation for a var or special form given its name"
-      (+ 1 1))))
-
-
-  (defn traverse [exp]
-    (println "op" (:op exp))
-    (when-let [children (seq (:children exp))]
-      (doseq [c children]
-        (traverse c))))
-
-  (traverse docm)
   )
