@@ -526,10 +526,11 @@
   Compiler$FnExpr
   (analysis->map
     [expr env]
-    (let [methods (doall (map analysis->map (.methods expr) (repeat env)))]
+    (let [methods (doall (map analysis->map (.methods expr) (repeat env)))
+          parent-field (partial field-accessor Compiler$ObjExpr)]
       (merge
         {:op :fn-expr
-         :env env
+         :env (assoc env :line (parent-field 'line expr))
          :methods methods
          :variadic-method (when-let [variadic-method (.variadicMethod expr)]
                             (analysis->map variadic-method env))
@@ -546,10 +547,11 @@
   (analysis->map
     [expr env]
     (let [field (partial field-accessor Compiler$NewInstanceExpr)
+          parent-field (partial field-accessor Compiler$ObjExpr)
           methods (doall (map analysis->map (field 'methods expr) (repeat env)))]
       (merge
         {:op :deftype*
-         :env env
+         :env (assoc env :line (parent-field 'line expr))
          :methods methods
          :mmap (field 'mmap expr)
          :covariants (field 'covariants expr)
