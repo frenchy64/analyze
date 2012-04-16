@@ -4,7 +4,7 @@
   "Interface to Compiler's analyze.
   Entry point `analyze-path` and `analyze-one`"
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
-           (clojure.lang RT Compiler$DefExpr Compiler$LocalBinding Compiler$BindingInit Compiler$LetExpr
+           (clojure.lang RT LineNumberingPushbackReader Compiler$DefExpr Compiler$LocalBinding Compiler$BindingInit Compiler$LetExpr
                          Compiler$LetFnExpr Compiler$StaticMethodExpr Compiler$InstanceMethodExpr Compiler$StaticFieldExpr
                          Compiler$NewExpr Compiler$EmptyExpr Compiler$VectorExpr Compiler$MonitorEnterExpr
                          Compiler$MonitorExitExpr Compiler$ThrowExpr Compiler$InvokeExpr Compiler$TheVarExpr Compiler$VarExpr
@@ -768,28 +768,36 @@
   (binding [*ns* (find-ns (-> env :ns :name))]
     (analyze* env form)))
 
+(def ^:private eof (Object.))
+
 (defn forms-seq
-  "Seq of forms in a Clojure or ClojureScript file."
-  ([f]
-     (forms-seq f (java.io.PushbackReader. (io/reader f))))
-  ([f ^java.io.PushbackReader rdr]
-     (if-let [form (read rdr nil nil)]
-       (lazy-seq (cons form (forms-seq f rdr)))
-       (.close rdr))))
+  "Lazy seq of forms in a Clojure or ClojureScript file."
+  [^java.io.PushbackReader rdr]
+  (lazy-seq
+   (let [form (read rdr nil eof)]
+     (when-not (identical? form eof)
+       (lazy-seq (cons form (forms-seq rdr)))))))
+       
 
 (defn analyze-path
   "Takes a path and a namespace symbol.
   Returns a seq of maps, with keys :op, :env. If expressions
   have children, will have :children entry."
-  [source-path ns]
-  (require ns)
-  (let [strm (.getResourceAsStream (RT/baseLoader) source-path)]
-    (with-open [rdr (PushbackReader. (InputStreamReader. strm))]
-      (let [frms (forms-seq nil rdr)
-            afn #(let [env {:ns {:name ns} :context :eval :locals {}}]
-                   (analyze* env %))]
-        (binding [*ns* (find-ns ns)]
-          (doall (map afn frms)))))))
+  ([ns-sym]
+     (analyze-path (-> (name ns-sym)
+                       (string/replace "." "/")
+                       (string/replace "-" "_")
+                       (str ".clj"))
+                   ns-sym))
+  ([source-path ns-sym]
+     (require ns-sym)
+     (let [uri (io/resource source-path)]
+       (with-open [rdr (LineNumberingPushbackReader. (io/reader uri))]
+         (let [frms (forms-seq rdr)
+               afn #(let [env {:ns {:name ns-sym} :context :eval :locals {}}]
+                      (analyze* env %))]
+           (binding [*ns* (find-ns ns-sym)]
+             (doall (map afn frms))))))))
 
 (comment
   (ast 
