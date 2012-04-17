@@ -39,7 +39,7 @@
   "Returns the abstract syntax tree representation of the given form,
   evaluated in the given namespace"
   [nsym form]
-  `(analyze-form-in-ns ~nsym '~form))
+  `(analyze-form-in-ns '~nsym '~form))
 
 (defmacro ast 
   "Returns the abstract syntax tree representation of the given form,
@@ -161,8 +161,7 @@
   (analysis->map
     [expr env]
     (let [body (analysis->map (.body expr) env)
-          binding-inits (-> (doall (map analysis->map (.bindingInits expr) (repeat env)))
-                            vec)]
+          binding-inits (doall (map analysis->map (.bindingInits expr) (repeat env)))]
       (merge
         {:op :let
          :env env
@@ -170,7 +169,7 @@
          :body body
          :is-loop (.isLoop expr)}
         (when *children*
-          {:children (conj binding-inits body)})
+          {:children (conj (vec binding-inits) body)})
         (when *java-obj*
           {:Expr-obj expr}))))
 
@@ -179,15 +178,14 @@
   (analysis->map
     [expr env]
     (let [body (analysis->map (.body expr) env)
-          binding-inits (-> (doall (map analysis->map (.bindingInits expr) (repeat env)))
-                            vec)]
+          binding-inits (doall (map analysis->map (.bindingInits expr) (repeat env)))]
       (merge
         {:op :letfn
          :env env
          :body body
          :binding-inits binding-inits}
         (when *children*
-          {:children (conj binding-inits body)})
+          {:children (conj (vec binding-inits) body)})
         (when *java-obj*
           {:Expr-obj expr}))))
 
