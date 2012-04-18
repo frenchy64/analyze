@@ -20,8 +20,8 @@
             [clojure.string :as string]
             [analyze.util :as util]))
 
-(def ^:dynamic *children* false)
-(def ^:dynamic *java-obj* false)
+(def CHILDREN (atom false))
+(def JAVA-OBJ (atom false))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interface
@@ -46,18 +46,6 @@
   evaluated in the current namespace"
   [form]
   `(analyze-form '~form))
-
-(defmacro ast-with-children 
-  "Same as `ast`, and include :children keys"
-  [form]
-  `(binding [*children* true]
-     (ast ~form)))
-
-(defmacro ast-with-java-obj 
-  "Same as `ast`, and include Java object keys"
-  [form]
-  `(binding [*java-obj* true]
-     (ast ~form)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utils
@@ -91,7 +79,7 @@
            {:op ~op-keyword
             :env env#
             :val (method# '~'val expr# [])}
-           (when *java-obj*
+           (when @JAVA-OBJ
              {:Expr-obj expr#}))))))
 
 (literal-dispatch Compiler$KeywordExpr :keyword)
@@ -121,9 +109,9 @@
          :init init
          :init-provided (field 'initProvided expr)
          :is-dynamic (field 'isDynamic expr)}
-        (when *children*
+        (when @CHILDREN
           {:children [meta init]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; let
@@ -138,9 +126,9 @@
          :sym (.sym lb)
          :tag (.tag lb)
          :init init}
-        (when *children*
+        (when @CHILDREN
           {:children (when init [init])})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:LocalBinding-obj lb}))))
 
   Compiler$BindingInit
@@ -152,9 +140,9 @@
         {:op :binding-init
          :local-binding local-binding
          :init init}
-        (when *children*
+        (when @CHILDREN
           {:children [local-binding init]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:BindingInit-obj bi}))))
 
   Compiler$LetExpr
@@ -168,9 +156,9 @@
          :binding-inits binding-inits
          :body body
          :is-loop (.isLoop expr)}
-        (when *children*
+        (when @CHILDREN
           {:children (conj (vec binding-inits) body)})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; letfn
@@ -184,9 +172,9 @@
          :env env
          :body body
          :binding-inits binding-inits}
-        (when *children*
+        (when @CHILDREN
           {:children (conj (vec binding-inits) body)})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; LocalBindingExpr
@@ -199,9 +187,9 @@
          :env env
          :local-binding local-binding
          :tag (.tag expr)}
-        (when *children*
+        (when @CHILDREN
           {:children [local-binding]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; Methods
@@ -221,9 +209,9 @@
                    (@#'reflect/method->map method))
          :args args
          :tag (field 'tag expr)}
-        (when *children*
+        (when @CHILDREN
           {:children args})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$InstanceMethodExpr
@@ -243,9 +231,9 @@
                    (@#'reflect/method->map method))
          :args args
          :tag (field 'tag expr)}
-        (when *children*
+        (when @CHILDREN
           {:children (cons target args)})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; Fields
@@ -262,7 +250,7 @@
          :field (when-let [field (field 'field expr)]
                   (@#'reflect/field->map field))
          :tag (field 'tag expr)}
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$InstanceFieldExpr
@@ -280,9 +268,9 @@
                   (@#'reflect/field->map field))
          :field-name (field 'fieldName expr)
          :tag (field 'tag expr)}
-        (when *children*
+        (when @CHILDREN
           {:children [target]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$NewExpr
@@ -296,9 +284,9 @@
                  (@#'reflect/constructor->map ctor))
          :class (.c expr)
          :args args}
-        (when *children*
+        (when @CHILDREN
           {:children args})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$EmptyExpr
@@ -308,7 +296,7 @@
       {:op :empty-expr
        :env env
        :coll (.coll expr)}
-      (when *java-obj*
+      (when @JAVA-OBJ
         {:Expr-obj expr})))
 
   ;; set literal
@@ -320,9 +308,9 @@
         {:op :set
          :env env
          :keys keys}
-        (when *children*
+        (when @CHILDREN
           {:children keys})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; vector literal
@@ -334,9 +322,9 @@
         {:op :vector
          :env env
          :args args}
-        (when *children*
+        (when @CHILDREN
           {:children args})
-        (when *java-obj* 
+        (when @JAVA-OBJ 
           {:Expr-obj expr}))))
 
   ;; map literal
@@ -348,9 +336,9 @@
         {:op :map
          :env env
          :keyvals keyvals}
-        (when *children*
+        (when @CHILDREN
           {:children keyvals})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; Untyped
@@ -363,9 +351,9 @@
         {:op :monitor-enter
          :env env
          :target target}
-        (when *children*
+        (when @CHILDREN
           {:children [target]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$MonitorExitExpr
@@ -377,9 +365,9 @@
         {:op :monitor-exit
          :env env
          :target target}
-        (when *children*
+        (when @CHILDREN
           {:children [target]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$ThrowExpr
@@ -391,9 +379,9 @@
         {:op :throw
          :env env
          :exception exception}
-        (when *children*
+        (when @CHILDREN
           {:children [exception]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; Invokes
@@ -417,9 +405,9 @@
          :protocol-on (field 'protocolOn expr)}
         (when-let [m (field 'onMethod expr)]
           {:method (@#'reflect/method->map m)})
-        (when *children*
+        (when @CHILDREN
           {:children (cons fexpr args)})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$KeywordInvokeExpr
@@ -435,9 +423,9 @@
          :kw (field 'kw expr)
          :tag (field 'tag expr)
          :target target}
-        (when *children*
+        (when @CHILDREN
           {:children [target]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; TheVarExpr
@@ -448,7 +436,7 @@
       {:op :the-var
        :env env
        :var (.var expr)}
-      (when *java-obj*
+      (when @JAVA-OBJ
         {:Expr-obj expr})))
 
   ;; VarExpr
@@ -460,7 +448,7 @@
        :env env
        :var (.var expr)
        :tag (.tag expr)}
-      (when *java-obj*
+      (when @JAVA-OBJ
         {:Expr-obj expr})))
 
   ;; UnresolvedVarExpr
@@ -472,7 +460,7 @@
         {:op :unresolved-var
          :env env
          :sym (field 'symbol expr)}
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; ObjExprs
@@ -483,7 +471,7 @@
       {:op :obj-expr
        :env env
        :tag (.tag expr)}
-      (when *java-obj*
+      (when @JAVA-OBJ
         {:Expr-obj expr})))
 
   ;; FnExpr (extends ObjExpr)
@@ -495,9 +483,9 @@
         {:op :new-instance-method
          :env env
          :body body}
-        (when *children*
+        (when @CHILDREN
           {:children [body]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:ObjMethod-obj obm}))))
 
   Compiler$FnMethod
@@ -516,9 +504,9 @@
                        (if rest-param
                          (analysis->map rest-param env)
                          rest-param))}
-        (when *children*
+        (when @CHILDREN
           {:children [body]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:ObjMethod-obj obm}))))
 
   Compiler$FnExpr
@@ -535,9 +523,9 @@
          :tag (.tag expr)}
         (when-let [nme (.thisName expr)]
           {:name (symbol nme)})
-        (when *children*
+        (when @CHILDREN
           {:children methods})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; NewInstanceExpr
@@ -554,9 +542,9 @@
          :mmap (field 'mmap expr)
          :covariants (field 'covariants expr)
          :tag (.tag expr)}
-        (when *children*
+        (when @CHILDREN
           {:children methods})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; InstanceOfExpr
@@ -569,9 +557,9 @@
         {:op :instance-of
          :class (field 'c expr)
          :the-expr exp}
-        (when *children*
+        (when @CHILDREN
           {:children [exp]})
-        (when *java-obj* 
+        (when @JAVA-OBJ 
           {:Expr-obj expr}))))
 
   ;; MetaExpr
@@ -585,9 +573,9 @@
          :env env
          :meta meta
          :expr the-expr}
-        (when *children*
+        (when @CHILDREN
           {:children [meta the-expr]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; do
@@ -599,9 +587,9 @@
         {:op :do
          :env env
          :exprs exprs}
-        (when *children*
+        (when @CHILDREN
           {:children exprs})
-        (when *java-obj* 
+        (when @JAVA-OBJ 
           {:Expr-obj expr}))))
 
   ;; if
@@ -618,9 +606,9 @@
          :test test
          :then then
          :else else}
-        (when *children*
+        (when @CHILDREN
           {:children [test then else]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; case
@@ -637,9 +625,9 @@
          :tests tests
          :thens thens
          :default default}
-        (when *children*
+        (when @CHILDREN
           {:children (concat [the-expr] tests thens [default])})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
 
@@ -651,7 +639,7 @@
       {:op :import*
        :env env
        :class-str (.c expr)}
-       (when *java-obj*
+       (when @JAVA-OBJ
          {:Expr-obj expr})))
 
   ;; AssignExpr (set!)
@@ -665,9 +653,9 @@
          :env env
          :target target
          :val val}
-        (when *children*
+        (when @CHILDREN
           {:children [target val]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;;TryExpr
@@ -682,9 +670,9 @@
          :class (.c ctch)
          :local-binding local-binding
          :handler handler}
-        (when *children*
+        (when @CHILDREN
           {:children [local-binding handler]})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:CatchClause-obj ctch}))))
 
   Compiler$TryExpr
@@ -702,9 +690,9 @@
          :catch-exprs catch-exprs
          :ret-local (.retLocal expr)
          :finally-local (.finallyLocal expr)}
-        (when *children*
+        (when @CHILDREN
           {:children (concat [try-expr] (when finally-expr [finally-expr]) catch-exprs)})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   ;; RecurExpr
@@ -721,9 +709,9 @@
                      :source (field 'source expr))
          :loop-locals loop-locals
          :args args}
-        (when *children*
+        (when @CHILDREN
           {:children (concat loop-locals args)})
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$MethodParamExpr
@@ -736,7 +724,7 @@
          :env env
          :class (field 'c expr)
          :can-emit-primitive (method 'canEmitPrimitive expr [])}
-        (when *java-obj*
+        (when @JAVA-OBJ
           {:Expr-obj expr})))))
 
 
@@ -782,20 +770,20 @@
   Returns a seq of maps, with keys :op, :env. If expressions
   have children, will have :children entry."
   ([ns-sym]
-     (analyze-path (-> (name ns-sym)
-                       (string/replace "." "/")
-                       (string/replace "-" "_")
-                       (str ".clj"))
-                   ns-sym))
+   (analyze-path (-> (name ns-sym)
+                   (string/replace "." "/")
+                   (string/replace "-" "_")
+                   (str ".clj"))
+                 ns-sym))
   ([source-path ns-sym]
-     (require ns-sym)
-     (let [uri (io/resource source-path)]
-       (with-open [rdr (LineNumberingPushbackReader. (io/reader uri))]
-         (let [frms (forms-seq rdr)
-               afn #(let [env {:ns {:name ns-sym} :context :eval :locals {}}]
-                      (analyze* env %))]
-           (binding [*ns* (find-ns ns-sym)]
-             (doall (map afn frms))))))))
+   (require ns-sym)
+   (let [uri (io/resource source-path)]
+     (with-open [rdr (LineNumberingPushbackReader. (io/reader uri))]
+       (let [frms (doall (forms-seq rdr))
+             afn #(let [env {:ns {:name ns-sym} :context :eval :locals {}}]
+                    (binding [*ns* (find-ns ns-sym)]
+                      (analyze* env %)))]
+         (map afn frms))))))
 
 (comment
   (ast 
