@@ -50,6 +50,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utils
 
+(defn- inherit-env [expr env]
+  (merge env
+         (when-let [line (-> expr :env :line)]
+           {:line line})
+         (when-let [source (-> expr :env :source)]
+           {:source source})))
+
 (defn- field-accessor [class-obj field obj]
   (let [field (.getDeclaredField class-obj (name field))]
     (.setAccessible field true)
@@ -122,7 +129,7 @@
                  (analysis->map init env))]
       (merge
         {:op :local-binding
-         :env env
+         :env (inherit-env init env)
          :sym (.sym lb)
          :tag (.tag lb)
          :init init}
@@ -138,6 +145,7 @@
           init (analysis->map (.init bi) env)]
       (merge
         {:op :binding-init
+         :env (inherit-env init env)
          :local-binding local-binding
          :init init}
         (when @CHILDREN
@@ -152,7 +160,7 @@
           binding-inits (doall (map analysis->map (.bindingInits expr) (repeat env)))]
       (merge
         {:op :let
-         :env env
+         :env (inherit-env body env)
          :binding-inits binding-inits
          :body body
          :is-loop (.isLoop expr)}
@@ -169,7 +177,7 @@
           binding-inits (doall (map analysis->map (.bindingInits expr) (repeat env)))]
       (merge
         {:op :letfn
-         :env env
+         :env (inherit-env body env)
          :body body
          :binding-inits binding-inits}
         (when @CHILDREN
@@ -184,7 +192,7 @@
     (let [local-binding (analysis->map (.b expr) env)]
       (merge
         {:op :local-binding-expr
-         :env env
+         :env (inherit-env local-binding env)
          :local-binding local-binding
          :tag (.tag expr)}
         (when @CHILDREN
@@ -555,6 +563,7 @@
           exp (analysis->map (field 'expr expr) env)]
       (merge
         {:op :instance-of
+         :env env
          :class (field 'c expr)
          :the-expr exp}
         (when @CHILDREN
@@ -585,7 +594,7 @@
     (let [exprs (doall (map analysis->map (.exprs expr) (repeat env)))]
       (merge
         {:op :do
-         :env env
+         :env (inherit-env (last exprs) env)
          :exprs exprs}
         (when @CHILDREN
           {:children exprs})
@@ -621,6 +630,7 @@
           default (analysis->map (.defaultExpr expr) env)]
       (merge
         {:op :case*
+         :env env
          :the-expr the-expr
          :tests tests
          :thens thens
