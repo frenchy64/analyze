@@ -422,13 +422,14 @@
   (analysis->map
     [expr env]
     (let [field (partial field-accessor Compiler$KeywordInvokeExpr)
-          target (analysis->map (field 'target expr) env)]
+          target (analysis->map (field 'target expr) env)
+          kw (analysis->map (field 'kw expr) env)]
       (merge
         {:op :keyword-invoke
          :env (assoc env
                      :line (field 'line expr)
                      :source (field 'source expr))
-         :kw (field 'kw expr)
+         :kw kw
          :tag (field 'tag expr)
          :target target}
         (when @CHILDREN
@@ -786,7 +787,7 @@
                    (str ".clj"))
                  ns-sym))
   ([source-path ns-sym]
-   (require ns-sym)
+   ;(require ns-sym)
    (let [uri (io/resource source-path)]
      (with-open [rdr (LineNumberingPushbackReader. (io/reader uri))]
        (let [frms (doall (forms-seq rdr))
