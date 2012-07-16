@@ -546,6 +546,7 @@
           methods (doall (map analysis->map (field 'methods expr) (repeat env)))]
       (merge
         {:op :deftype*
+         :name (symbol (parent-field 'name expr))
          :env (assoc env :line (parent-field 'line expr))
          :methods methods
          :mmap (field 'mmap expr)
