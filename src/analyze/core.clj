@@ -13,7 +13,8 @@
                          Compiler$TryExpr$CatchClause Compiler$TryExpr Compiler$C Compiler$LocalBindingExpr Compiler$RecurExpr
                          Compiler$MapExpr Compiler$IfExpr Compiler$KeywordInvokeExpr Compiler$InstanceFieldExpr Compiler$InstanceOfExpr
                          Compiler$CaseExpr Compiler$Expr Compiler$SetExpr Compiler$MethodParamExpr Compiler$KeywordExpr
-                         Compiler$ConstantExpr Compiler$NumberExpr Compiler$NilExpr Compiler$BooleanExpr Compiler$StringExpr))
+                         Compiler$ConstantExpr Compiler$NumberExpr Compiler$NilExpr Compiler$BooleanExpr Compiler$StringExpr
+                         Compiler$ObjMethod))
   (:require [clojure.reflect :as reflect]
             [clojure.java.io :as io]
             [clojure.repl :as repl]
@@ -488,11 +489,14 @@
   (analysis->map
     [obm env]
     (let [field (partial field-accessor Compiler$NewInstanceMethod)
+          parent-field (partial field-accessor Compiler$ObjMethod)
           body (analysis->map (.body obm) env)]
       (merge
         {:op :new-instance-method
          :env env
          :name (symbol (field 'name obm))
+         :required-params (doall (for [[_ e] (sort-by key (parent-field 'indexlocals obm))]
+                                   (analysis->map e env)))
          :body body}
         (when @CHILDREN
           {:children [body]})
