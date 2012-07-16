@@ -487,10 +487,12 @@
   Compiler$NewInstanceMethod
   (analysis->map
     [obm env]
-    (let [body (analysis->map (.body obm) env)]
+    (let [field (partial field-accessor Compiler$NewInstanceMethod)
+          body (analysis->map (.body obm) env)]
       (merge
         {:op :new-instance-method
          :env env
+         :name (symbol (field 'name obm))
          :body body}
         (when @CHILDREN
           {:children [body]})
