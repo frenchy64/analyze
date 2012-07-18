@@ -1,4 +1,4 @@
-(set! *warn-on-reflection* false)
+(set! *warn-on-reflection* true)
 
 (ns analyze.core
   "Interface to Compiler's analyze.
@@ -75,48 +75,70 @@
   (analysis->map [aobj env]
     "Recursively converts the output of the Compiler's analysis to a map"))
 
-;; Literals extending abstract class Compiler$LiteralExpr
+;; Literals extending abstract class Compiler$LiteralExpr and have public value fields
 
-(defmacro literal-dispatch [disp-class op-keyword]
+(defmacro literal-dispatch [disp-class op-keyword field]
   `(extend-protocol AnalysisToMap
      ~disp-class
      (~'analysis->map
        [expr# env#]
-       (let [method# (partial method-accessor ~disp-class)]
+       (let []
          (merge
            {:op ~op-keyword
             :env env#
-            :val (method# '~'val expr# [])}
+            :val (~(symbol (str "." field)) expr#)}
            (when @JAVA-OBJ
              {:Expr-obj expr#}))))))
 
-(literal-dispatch Compiler$KeywordExpr :keyword)
-(literal-dispatch Compiler$ConstantExpr :constant)
-(literal-dispatch Compiler$NumberExpr :number)
-(literal-dispatch Compiler$NilExpr :nil)
-(literal-dispatch Compiler$StringExpr :string)
-(literal-dispatch Compiler$BooleanExpr :boolean)
+(literal-dispatch Compiler$KeywordExpr :keyword "k")
+(literal-dispatch Compiler$ConstantExpr :constant "v")
+(literal-dispatch Compiler$StringExpr :string "str")
+(literal-dispatch Compiler$BooleanExpr :boolean "val")
 
 (extend-protocol AnalysisToMap
+
+  ;; number
+  Compiler$NumberExpr
+  (analysis->map
+    [expr env]
+    (let [field (partial field-accessor Compiler$NumberExpr)]
+      (merge
+        {:op :number
+         :env env
+         ;Reflection
+         :val (field 'n expr)}
+        (when @JAVA-OBJ
+          {:Expr-obj expr}))))
+
+  ;; nil
+  Compiler$NilExpr
+  (analysis->map
+    [expr env]
+    (let []
+      (merge
+        {:op :nil
+         :env env
+         :val nil}
+        (when @JAVA-OBJ
+          {:Expr-obj expr}))))
 
   ;; def
   Compiler$DefExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$DefExpr)
-          init (analysis->map (field 'init expr) env)
-          meta (when-let [meta (field 'meta expr)]
+    (let [init (analysis->map (.init expr) env)
+          meta (when-let [meta (.meta expr)]
                  (analysis->map meta env))]
       (merge 
         {:op :def
          :env (assoc env
-                     :source (field 'source expr)
-                     :line (field 'line expr))
-         :var (field 'var expr)
+                     :source (.source expr)
+                     :line (.line expr))
+         :var (.var expr)
          :meta meta
          :init init
-         :init-provided (field 'initProvided expr)
-         :is-dynamic (field 'isDynamic expr)}
+         :init-provided (.initProvided expr)
+         :is-dynamic (.isDynamic expr)}
         (when @CHILDREN
           {:children [meta init]})
         (when @JAVA-OBJ
@@ -205,19 +227,18 @@
   Compiler$StaticMethodExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$StaticMethodExpr)
-          args (doall (map analysis->map (field 'args expr) (repeat env)))]
+    (let [args (doall (map analysis->map (.args expr) (repeat env)))]
       (merge
         {:op :static-method
          :env (assoc env
-                     :source (field 'source expr)
-                     :line (field 'line expr))
-         :class (field 'c expr)
-         :method-name (field 'methodName expr)
-         :method (when-let [method (field 'method expr)]
+                     :source (.source expr)
+                     :line (.line expr))
+         :class (.c expr)
+         :method-name (.methodName expr)
+         :method (when-let [method (.method expr)]
                    (@#'reflect/method->map method))
          :args args
-         :tag (field 'tag expr)}
+         :tag (.tag expr)}
         (when @CHILDREN
           {:children args})
         (when @JAVA-OBJ
@@ -226,20 +247,19 @@
   Compiler$InstanceMethodExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$InstanceMethodExpr)
-          target (analysis->map (field 'target expr) env)
-          args (doall (map analysis->map (field 'args expr) (repeat env)))]
+    (let [target (analysis->map (.target expr) env)
+          args (doall (map analysis->map (.args expr) (repeat env)))]
       (merge
         {:op :instance-method
          :env (assoc env
-                     :source (field 'source expr)
-                     :line (field 'line expr))
+                     :source (.source expr)
+                     :line (.line expr))
          :target target
-         :method-name (field 'methodName expr)
-         :method (when-let [method (field 'method expr)]
+         :method-name (.methodName expr)
+         :method (when-let [method (.method expr)]
                    (@#'reflect/method->map method))
          :args args
-         :tag (field 'tag expr)}
+         :tag (.tag expr)}
         (when @CHILDREN
           {:children (cons target args)})
         (when @JAVA-OBJ
@@ -249,34 +269,34 @@
   Compiler$StaticFieldExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$StaticFieldExpr)]
+    (let []
       (merge
         {:op :static-field
-         :env (assoc env
-                     :line (field 'line expr))
-         :class (field 'c expr)
-         :field-name (field 'fieldName expr)
-         :field (when-let [field (field 'field expr)]
+         :env env
+               ; can't get without reflection
+               ;:line (.line expr)
+         :class (.c expr)
+         :field-name (.fieldName expr)
+         :field (when-let [field (.field expr)]
                   (@#'reflect/field->map field))
-         :tag (field 'tag expr)}
+         :tag (.tag expr)}
         (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
   Compiler$InstanceFieldExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$InstanceFieldExpr)
-          target (analysis->map (field 'target expr) env)]
+    (let [target (analysis->map (.target expr) env)]
       (merge
         {:op :instance-field
          :env (assoc env
-                     :line (field 'line expr))
+                     :line (.line expr))
          :target target
-         :target-class (field 'targetClass expr)
-         :field (when-let [field (field 'field expr)]
+         :target-class (.targetClass expr)
+         :field (when-let [field (.field expr)]
                   (@#'reflect/field->map field))
-         :field-name (field 'fieldName expr)
-         :tag (field 'tag expr)}
+         :field-name (.fieldName expr)
+         :tag (.tag expr)}
         (when @CHILDREN
           {:children [target]})
         (when @JAVA-OBJ
@@ -355,6 +375,7 @@
   (analysis->map
     [expr env]
     (let [field (partial field-accessor Compiler$MonitorEnterExpr)
+          ; Reflection
           target (analysis->map (field 'target expr) env)]
       (merge
         {:op :monitor-enter
@@ -369,6 +390,7 @@
   (analysis->map
     [expr env]
     (let [field (partial field-accessor Compiler$MonitorExitExpr)
+          ; Reflection
           target (analysis->map (field 'target expr) env)]
       (merge
         {:op :monitor-exit
@@ -382,8 +404,7 @@
   Compiler$ThrowExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$ThrowExpr)
-          exception (analysis->map (field 'excExpr expr) env)]
+    (let [exception (analysis->map (.excExpr expr) env)]
       (merge
         {:op :throw
          :env env
@@ -397,22 +418,21 @@
   Compiler$InvokeExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$InvokeExpr)
-          fexpr (analysis->map (field 'fexpr expr) env)
-          args (doall (map analysis->map (field 'args expr) (repeat env)))]
+    (let [fexpr (analysis->map (.fexpr expr) env)
+          args (doall (map analysis->map (.args expr) (repeat env)))]
       (merge
         {:op :invoke
          :env (assoc env
-                     :line (field 'line expr)
-                     :source (field 'source expr))
+                     :line (.line expr)
+                     :source (.source expr))
          :fexpr fexpr
-         :tag (field 'tag expr)
+         :tag (.tag expr)
          :args args
-         :is-protocol (field 'isProtocol expr)
-         :is-direct (field 'isDirect expr)
-         :site-index (field 'siteIndex expr)
-         :protocol-on (field 'protocolOn expr)}
-        (when-let [m (field 'onMethod expr)]
+         :is-protocol (.isProtocol expr)
+         :is-direct (.isDirect expr)
+         :site-index (.siteIndex expr)
+         :protocol-on (.protocolOn expr)}
+        (when-let [m (.onMethod expr)]
           {:method (@#'reflect/method->map m)})
         (when @CHILDREN
           {:children (cons fexpr args)})
@@ -422,16 +442,15 @@
   Compiler$KeywordInvokeExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$KeywordInvokeExpr)
-          target (analysis->map (field 'target expr) env)
-          kw (analysis->map (field 'kw expr) env)]
+    (let [target (analysis->map (.target expr) env)
+          kw (analysis->map (.kw expr) env)]
       (merge
         {:op :keyword-invoke
          :env (assoc env
-                     :line (field 'line expr)
-                     :source (field 'source expr))
+                     :line (.line expr)
+                     :source (.source expr))
          :kw kw
-         :tag (field 'tag expr)
+         :tag (.tag expr)
          :target target}
         (when @CHILDREN
           {:children [target]})
@@ -465,11 +484,11 @@
   Compiler$UnresolvedVarExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$UnresolvedVarExpr)]
+    (let []
       (merge
         {:op :unresolved-var
          :env env
-         :sym (field 'symbol expr)}
+         :sym (.symbol expr)}
         (when @JAVA-OBJ
           {:Expr-obj expr}))))
 
@@ -488,6 +507,7 @@
   Compiler$NewInstanceMethod
   (analysis->map
     [obm env]
+    ;Reflection
     (let [field (partial field-accessor Compiler$NewInstanceMethod)
           parent-field (partial field-accessor Compiler$ObjMethod)
           body (analysis->map (.body obm) env)]
@@ -527,11 +547,11 @@
   Compiler$FnExpr
   (analysis->map
     [expr env]
-    (let [methods (doall (map analysis->map (.methods expr) (repeat env)))
-          parent-field (partial field-accessor Compiler$ObjExpr)]
+    (let [methods (doall (map analysis->map (.methods expr) (repeat env)))]
       (merge
         {:op :fn-expr
-         :env (assoc env :line (parent-field 'line expr))
+         :env (assoc env 
+                     :line (.line expr))
          :methods methods
          :variadic-method (when-let [variadic-method (.variadicMethod expr)]
                             (analysis->map variadic-method env))
@@ -547,15 +567,19 @@
   Compiler$NewInstanceExpr
   (analysis->map
     [expr env]
+    ;Reflection
     (let [field (partial field-accessor Compiler$NewInstanceExpr)
-          parent-field (partial field-accessor Compiler$ObjExpr)
           methods (doall (map analysis->map (field 'methods expr) (repeat env)))]
       (merge
         {:op :deftype*
-         :name (symbol (parent-field 'name expr))
-         :env (assoc env :line (parent-field 'line expr))
+         :name (symbol (.name expr))
+         :env (assoc env 
+                     :line (.line expr))
          :methods methods
          :mmap (field 'mmap expr)
+         ;TODO unordered? where is the ordered field list
+;         :fields (into {} (for [[k v] (parent-field 'fields expr)]
+;                            [k (analysis->map v env)]))
          :covariants (field 'covariants expr)
          :tag (.tag expr)}
         (when @CHILDREN
@@ -567,6 +591,7 @@
   Compiler$InstanceOfExpr
   (analysis->map
     [expr env]
+    ;Reflection
     (let [field (partial field-accessor Compiler$InstanceOfExpr)
           exp (analysis->map (field 'expr expr) env)]
       (merge
@@ -723,6 +748,7 @@
       (merge
         {:op :recur
          :env (assoc env
+                     ;Reflection
                      :line (field 'line expr)
                      :source (field 'source expr))
          :loop-locals loop-locals
@@ -735,13 +761,12 @@
   Compiler$MethodParamExpr
   (analysis->map
     [expr env]
-    (let [field (partial field-accessor Compiler$MethodParamExpr)
-          method (partial method-accessor Compiler$MethodParamExpr)]
+    (let []
       (merge
         {:op :method-param
          :env env
-         :class (field 'c expr)
-         :can-emit-primitive (method 'canEmitPrimitive expr [])}
+         :class (.getJavaClass expr)
+         :can-emit-primitive (.canEmitPrimitive expr)}
         (when @JAVA-OBJ
           {:Expr-obj expr})))))
 
