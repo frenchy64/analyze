@@ -473,8 +473,10 @@
          :env (assoc env
                      :line (.line obm))
          :name (symbol (.getMethodName obm))
-         :required-params (for [[_ e] (sort-by key (.indexlocals obm))]
-                            (analysis->map e env))
+         :required-params (map analysis->map 
+                               (concat [((.indexlocals obm) 0)]
+                                       (.argLocals obm))
+                               (repeat env))
          :body body}
         (when @CHILDREN
           {:children [body]})
