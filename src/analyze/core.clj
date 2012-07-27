@@ -272,7 +272,8 @@
     (let [args (map analysis->map (.args expr) (repeat env))]
       (merge
         {:op :new
-         :env env
+         :env (assoc env
+                     :line (.line expr))
          :ctor (when-let [ctor (.ctor expr)]
                  (@#'reflect/constructor->map ctor))
          :class (.c expr)
