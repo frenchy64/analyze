@@ -52,7 +52,8 @@
 ;; Utils
 
 (defmacro field 
-  "Call a private field, must be known at compile time"
+  "Call a private field, must be known at compile time. Throws an error
+  if field is already publicly accessible."
   ([class-obj field] `(field ~class-obj ~field nil))
   ([class-obj field obj]
    (let [{class-flags :flags :keys [members]} (reflect/reflect (resolve class-obj))
