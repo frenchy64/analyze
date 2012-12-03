@@ -1,3 +1,5 @@
+Clojars Dependency: `[analyze "0.2"]`
+
 # Interface to Clojure's Analyzer
 
 Clojure's analysis compilation phase holds rich information about Clojure forms, like type/reflection information.
@@ -11,6 +13,11 @@ _analyze_ provides an interface to this phase, callable a la carte. The output i
 Pull requests accepted from registered Clojure contributers
 
 http://clojure.org/contributing
+
+# Changelog
+
+0.2.1
+- `eval` forms before analysing them
 
 # Usage
 
@@ -84,7 +91,7 @@ nil
 
 https://clojars.org/analyze
 
-Current version: 0.1.5
+Current version: 0.2
 
 # Todo
 

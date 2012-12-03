@@ -764,7 +764,6 @@
         (when @JAVA-OBJ
           {:Expr-obj expr})))))
 
-
 (defn- analyze*
   "Must be called after binding the appropriate Compiler and RT dynamic Vars."
   [env form]
@@ -775,11 +774,12 @@
                     :expression Compiler$C/EXPRESSION
                     :return Compiler$C/RETURN
                     :eval Compiler$C/EVAL)
-          exprs (try
-                  (invoke-analyze context form)
-                  (catch RuntimeException e
-                    (throw (repl/root-cause e))))]
-      (analysis->map exprs (merge-with conj (dissoc env :context) {:locals {}})))))
+          _ (eval form)
+          expr-ast (try
+                     (invoke-analyze context form)
+                     (catch RuntimeException e
+                       (throw (repl/root-cause e))))]
+      (analysis->map expr-ast (merge-with conj (dissoc env :context) {:locals {}})))))
 
 (defn analyze-one
   "Analyze a single form"
@@ -864,5 +864,9 @@
   (ast (Integer. (+ 1 1)))
 
   (ast (map io/file [1 2]))
+
+  (ast (do 
+         (require '[clojure.repl :refer [pst]])
+         (pst)))
 
   )

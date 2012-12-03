@@ -1,3 +1,3 @@
-(defproject analyze "0.2"
+(defproject analyze "0.2.1"
   :description "Interface to Clojure Analyzer"
   :dependencies [[org.clojure/clojure "1.5.0-beta1"]])
