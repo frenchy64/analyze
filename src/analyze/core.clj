@@ -774,7 +774,6 @@
                     :expression Compiler$C/EXPRESSION
                     :return Compiler$C/RETURN
                     :eval Compiler$C/EVAL)
-          _ (eval form)
           expr-ast (try
                      (invoke-analyze context form)
                      (catch RuntimeException e

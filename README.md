@@ -16,6 +16,9 @@ http://clojure.org/contributing
 
 # Changelog
 
+0.2.2
+- Revert to not `eval`ing forms before analysing
+
 0.2.1
 - `eval` forms before analysing them
 
