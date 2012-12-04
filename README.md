@@ -6,7 +6,7 @@ Clojure's analysis compilation phase holds rich information about Clojure forms,
 
 _analyze_ provides an interface to this phase, callable a la carte. The output is similar to ClojureScript's analyzer.
 
-*Clojure 1.5.0-beta1 only.*
+Supports Clojure 1.4.0 or later.
 
 # Contributing
 
