@@ -30,6 +30,8 @@ http://clojure.org/contributing
 
 # Usage
 
+## Generating AST from syntax
+
 ```clojure
 
 analyze.core=> (ast [1])
@@ -94,6 +96,18 @@ analyze.core=> (-> (ast (fn [x] (+ x 1))) clojure.pprint/pprint)
  :variadic-method nil,
  :tag nil}
 nil
+```
+
+## Syntax from AST
+
+
+```clojure
+analyze.core=> (require '[analyze.emit-form :as e])
+nil
+analyze.core=> (-> (ast 1) e/map->form)
+1
+analyze.core=> (-> (ast [(+ 1 2)]) e/map->form)
+[(. clojure.lang.Numbers add 1 2)]
 ```
 
 # Download
