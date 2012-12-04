@@ -1,4 +1,3 @@
-(defproject analyze "0.2.3-SNAPSHOT"
+(defproject analyze "0.2.3"
   :description "Interface to Clojure Analyzer"
-  :dependencies [[org.clojure/clojure "1.4.0"]]
-  )
+  :dependencies [[org.clojure/clojure "1.4.0"]])

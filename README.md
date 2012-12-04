@@ -1,4 +1,4 @@
-Clojars Dependency: `[analyze "0.2"]`
+Clojars Dependency: `[analyze "0.2.3"]`
 
 # Interface to Clojure's Analyzer
 
