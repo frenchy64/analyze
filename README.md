@@ -16,6 +16,12 @@ http://clojure.org/contributing
 
 # Changelog
 
+0.2.3-SNAPSHOT
+- Add `analyze.emit-form/map->form`
+- Support Clojure 1.4.0+
+
+0.2.2
+
 0.2.2
 - Revert to not `eval`ing forms before analysing
 

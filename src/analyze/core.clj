@@ -809,6 +809,31 @@
   (let [uri (uri-for-ns ns-sym)]
     (LineNumberingPushbackReader. (io/reader uri))))
 
+(defonce ^:private Compiler-members (set (map :name (:members (reflect/type-reflect RT)))))
+(defonce ^:private RT-members (set (map :name (:members (reflect/type-reflect RT)))))
+
+(defmacro ^:private thrd-bindings [source-path source-nsym pushback-reader]
+  `(merge
+     {Compiler/LOADER (RT/makeClassLoader)
+      Compiler/SOURCE_PATH (str ~source-path)
+      Compiler/SOURCE (str ~source-nsym)
+      Compiler/METHOD nil
+      Compiler/LOCAL_ENV nil
+      Compiler/LOOP_LOCALS nil
+      Compiler/NEXT_LOCAL_NUM 0
+      RT/CURRENT_NS @RT/CURRENT_NS
+      Compiler/LINE_BEFORE (.getLineNumber ~pushback-reader)
+      Compiler/LINE_AFTER (.getLineNumber ~pushback-reader)
+      RT/UNCHECKED_MATH @RT/UNCHECKED_MATH}
+     ~(when (RT-members 'WARN_ON_REFLECTION)
+        `{(field RT ~'WARN_ON_REFLECTION) @(field RT ~'WARN_ON_REFLECTION)})
+     ~(when (Compiler-members 'COLUMN_BEFORE)
+        `{Compiler/COLUMN_BEFORE (.getColumnNumber ~pushback-reader)})
+     ~(when (Compiler-members 'COLUMN_AFTER)
+        `{Compiler/COLUMN_AFTER (.getColumnNumber ~pushback-reader)})
+     ~(when (RT-members 'DATA_READERS)
+        `{RT/DATA_READERS @RT/DATA_READERS})))
+
 (defn analyze-ns
   "Takes a LineNumberingPushbackReader and a namespace symbol.
   Returns a vector of maps, with keys :op, :env. If expressions
@@ -822,21 +847,7 @@
                           rdr
                           (LineNumberingPushbackReader. rdr))]
     (do
-      (push-thread-bindings {Compiler/LOADER (RT/makeClassLoader)
-                             Compiler/SOURCE_PATH (str source-path)
-                             Compiler/SOURCE (str source-nsym)
-                             Compiler/METHOD nil
-                             Compiler/LOCAL_ENV nil
-                             Compiler/LOOP_LOCALS nil
-                             Compiler/NEXT_LOCAL_NUM 0
-                             RT/CURRENT_NS @RT/CURRENT_NS
-                             Compiler/LINE_BEFORE (.getLineNumber pushback-reader)
-                             Compiler/COLUMN_BEFORE (.getColumnNumber pushback-reader)
-                             Compiler/LINE_AFTER (.getLineNumber pushback-reader)
-                             Compiler/COLUMN_AFTER (.getColumnNumber pushback-reader)
-                             RT/UNCHECKED_MATH @RT/UNCHECKED_MATH
-                             (field RT WARN_ON_REFLECTION) @(field RT WARN_ON_REFLECTION)
-                             RT/DATA_READERS @RT/DATA_READERS})
+      (push-thread-bindings (thrd-bindings source-path source-nsym pushback-reader))
       (try
         (let [eof (reify)]
           (loop [form (read pushback-reader nil eof)
