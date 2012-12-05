@@ -108,6 +108,26 @@
   [{:keys [class-str]}] 
   (list 'import* class-str))
 
+(defmethod map->form :keyword-invoke
+  [{:keys [kw target]}] 
+  (list kw (map->form target)))
+
+(defmethod map->form :throw
+  [{:keys [exception]}] 
+  (list 'throw (map->form exception)))
+
+(defmethod map->form :try
+  [{:keys [try-expr catch-exprs finally-expr ]}] 
+  (list* 'try (map->form try-expr)
+         (concat
+           (map map->form catch-exprs)
+           (when finally-expr [(list 'finally (map->form finally-expr))]))))
+
+(defmethod map->form :catch
+  [{:keys [class local-binding handler]}]
+  (list 'catch (map->form local-binding) 
+        (map->form handler)))
+
 (comment
   (defmacro frm [f]
     `(-> (ast ~f) map->form))
@@ -149,4 +169,13 @@
   (frm (deftype A []
          clojure.lang.ISeq
          (first [this] this)))
+
+  (frm (:a {}))
+  (frm (throw (Exception. "a")))
+  (frm (try 1 2 
+         (catch Exception e 
+           4)
+         (catch Error e
+           5)
+         (finally 3.2)))
   )

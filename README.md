@@ -1,4 +1,4 @@
-Clojars Dependency: `[analyze "0.2.3"]`
+Clojars Dependency: `[analyze "0.2.4"]`
 
 # Interface to Clojure's Analyzer
 
@@ -15,6 +15,9 @@ Pull requests accepted from registered Clojure contributers
 http://clojure.org/contributing
 
 # Changelog
+
+0.2.4
+- More cases for `map->form`
 
 0.2.3
 - Add `analyze.emit-form/map->form`
