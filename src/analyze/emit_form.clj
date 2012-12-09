@@ -12,9 +12,12 @@
 
 (defmethod map->form :static-method 
   [{:keys [class method-name args]}] 
-  `(. ~(symbol (.getName class))
-      ~(symbol method-name)
-      ~@(map map->form args)))
+  `(~(symbol (.getName class) (str method-name))
+       ~@(map map->form args)))
+
+(defmethod map->form :static-field 
+  [{:keys [class field-name]}]
+  (symbol (.getName class) (str field-name)))
 
 (defmethod map->form :invoke
   [{:keys [fexpr args]}]
@@ -178,4 +181,6 @@
          (catch Error e
            5)
          (finally 3.2)))
+  (frm (Integer/toHexString 1))
+  (frm (Integer/TYPE))
   )
