@@ -46,7 +46,7 @@
 
 (defmethod map->form :fn-expr
   [{:keys [methods variadic-method]}]
-  (list* 'fn (map map->form (concat methods (when variadic-method [variadic-method])))))
+  (list* 'fn* (map map->form (concat methods (when variadic-method [variadic-method])))))
 
 (defmethod map->form :fn-method
   [{:keys [body required-params rest-param]}]
