@@ -16,6 +16,10 @@ http://clojure.org/contributing
 
 # Changelog
 
+0.2.5
+- More cases for `map->form`
+- Fix :fn-expr case for `map->form`, now emits `fn*` instead of `fn`
+
 0.2.4
 - More cases for `map->form`
 

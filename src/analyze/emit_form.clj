@@ -113,7 +113,7 @@
 
 (defmethod map->form :keyword-invoke
   [{:keys [kw target]}] 
-  (list kw (map->form target)))
+  (list (map->form kw) (map->form target)))
 
 (defmethod map->form :throw
   [{:keys [exception]}] 
