@@ -1,4 +1,4 @@
-Clojars Dependency: `[analyze "0.2.4"]`
+Clojars Dependency: `[analyze "0.2.5"]`
 
 # Interface to Clojure's Analyzer
 
@@ -115,21 +115,18 @@ analyze.core=> (-> (ast [(+ 1 2)]) e/map->form)
 [(. clojure.lang.Numbers add 1 2)]
 ```
 
-# Download
-
-https://clojars.org/analyze
-
-Current version: 0.2
-
 # Todo
 
 - analyze a leiningen `project.clj` file
 - analyze `clojure.core`
-- does each expression have a line number attached?
-- try evaling the Expr forms returned by the analyzer and see what happens
-- Review SOURCE var
 - use :locals if necessary
 
 # Examples
 
 See `analyze.examples.*` namespaces.
+
+# Contributors
+
+Jonas Enlund (jonase)
+Nicola Mometto (Bronsa)
+Chris Gray (chrismgray)
