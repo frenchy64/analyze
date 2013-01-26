@@ -16,6 +16,9 @@ http://clojure.org/contributing
 
 # Changelog
 
+0.2.6-SNAPSHOT
+- More macroexpansion cases
+
 0.2.5
 - More cases for `map->form`
 - Fix :fn-expr case for `map->form`, now emits `fn*` instead of `fn`
