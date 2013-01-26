@@ -141,20 +141,19 @@
 ;; (from Compiler.java)
 ;;  //(case* expr shift mask default map<minhash, [test then]> table-type test-type skip-check?)
 (defmethod map->form :case*
-  [{:keys [the-expr tests thens default shift mask low high switch-type test-type skip-check]}]
-  (list* 'case*
-         (map->form the-expr)
-         shift
-         mask
-         (map->form default)
-         (let [texprs (map map->form tests)]
-           (zipmap texprs
-                   (map vector texprs
-                        (map map->form thens))))
-         switch-type
-         test-type
-         (when skip-check
-           [skip-check])))
+  [{:keys [the-expr tests thens default tests-hashes shift mask low high switch-type test-type skip-check]}]
+  (list 'case*
+        (map->form the-expr)
+        shift
+        mask
+        (map->form default)
+        (zipmap tests-hashes
+                (map vector
+                     (map map->form tests)
+                     (map map->form thens)))
+        switch-type
+        test-type
+        skip-check))
 
 
 (comment
@@ -217,4 +216,5 @@
 
   (frm #{1 2 3})
   (frm (case 1 2 3 4))
+  (frm (case 1 :a 3 4))
   )

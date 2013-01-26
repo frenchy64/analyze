@@ -666,6 +666,7 @@
          :tests tests
          :thens thens
          :default default
+         :tests-hashes (keys (.tests expr))
          :shift (.shift expr)
          :mask (.mask expr)
          :test-type (.testType expr)
