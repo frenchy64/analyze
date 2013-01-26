@@ -650,6 +650,8 @@
           {:Expr-obj expr}))))
 
   ;; case
+  ;; (from Compiler.java)
+  ;;  //(case* expr shift mask default map<minhash, [test then]> table-type test-type skip-check?)
   Compiler$CaseExpr
   (analysis->map
     [expr env]
@@ -663,7 +665,12 @@
          :the-expr the-expr
          :tests tests
          :thens thens
-         :default default}
+         :default default
+         :shift (.shift expr)
+         :mask (.mask expr)
+         :test-type (.testType expr)
+         :switch-type (.switchType expr)
+         :skip-check (.skipCheck expr)}
         (when @CHILDREN
           {:children (concat [the-expr] tests thens [default])})
         (when @JAVA-OBJ

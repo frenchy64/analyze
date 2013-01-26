@@ -5,7 +5,7 @@
 
 (defmethod map->form :nil [{:keys [val]}] val)
 (defmethod map->form :number [{:keys [val]}] val)
-(defmethod map->form :constant [{:keys [val]}] val)
+(defmethod map->form :constant [{:keys [val]}] (list 'quote val))
 (defmethod map->form :string [{:keys [val]}] val)
 (defmethod map->form :boolean [{:keys [val]}] val)
 (defmethod map->form :keyword [{:keys [val]}] val)
@@ -49,7 +49,7 @@
 (defmethod map->form :empty-expr [{:keys [coll]}] coll)
 (defmethod map->form :vector [{:keys [args]}] (vec (map map->form args)))
 (defmethod map->form :map [{:keys [keyvals]}] (apply hash-map (map map->form keyvals)))
-(defmethod map->form :set [{:keys [keyvals]}] (set (map map->form keyvals)))
+(defmethod map->form :set [{:keys [keys]}] (set (map map->form keys)))
 
 (defmethod map->form :fn-expr
   [{:keys [methods variadic-method]}]
@@ -138,6 +138,25 @@
   (list 'catch (map->form local-binding) 
         (map->form handler)))
 
+;; (from Compiler.java)
+;;  //(case* expr shift mask default map<minhash, [test then]> table-type test-type skip-check?)
+(defmethod map->form :case*
+  [{:keys [the-expr tests thens default shift mask low high switch-type test-type skip-check]}]
+  (list* 'case*
+         (map->form the-expr)
+         shift
+         mask
+         (map->form default)
+         (let [texprs (map map->form tests)]
+           (zipmap texprs
+                   (map vector texprs
+                        (map map->form thens))))
+         switch-type
+         test-type
+         (when skip-check
+           [skip-check])))
+
+
 (comment
   (defmacro frm [f]
     `(-> (ast ~f) map->form))
@@ -191,4 +210,11 @@
   (frm (Integer/toHexString 1))
   (frm (Integer/TYPE))
   (frm #'conj)
+  
+  (frm 'a)
+  (frm (let [b 1] 
+         [b 'a 1]))
+
+  (frm #{1 2 3})
+  (frm (case 1 2 3 4))
   )
