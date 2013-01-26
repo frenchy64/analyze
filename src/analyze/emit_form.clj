@@ -24,9 +24,16 @@
   `(~(map->form fexpr)
        ~@(map map->form args)))
 
+(defn- var->symbol [var]
+  (symbol (str (ns-name (.ns var))) (str (.sym var))))
+
+(defmethod map->form :the-var
+  [{:keys [var]}]
+  (list 'var (var->symbol var)))
+
 (defmethod map->form :var
   [{:keys [var]}]
-  (symbol (str (ns-name (.ns var))) (str (.sym var))))
+  (var->symbol var))
 
 (defmethod map->form :instance-method
   [{:keys [target method-name args]}]
@@ -183,4 +190,5 @@
          (finally 3.2)))
   (frm (Integer/toHexString 1))
   (frm (Integer/TYPE))
+  (frm #'conj)
   )
