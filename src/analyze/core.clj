@@ -846,28 +846,30 @@
   "Takes a LineNumberingPushbackReader and a namespace symbol.
   Returns a vector of maps, with keys :op, :env. If expressions
   have children, will have :children entry.
-  
-  eg. (analyze-path (pb-reader-for-ns 'my.ns) 'my-ns)"
-  [rdr source-path source-nsym]
-  (let [eof (reify)
-        ^LineNumberingPushbackReader 
-        pushback-reader (if (instance? LineNumberingPushbackReader rdr)
-                          rdr
-                          (LineNumberingPushbackReader. rdr))]
-    (do
-      (push-thread-bindings (thrd-bindings source-path source-nsym pushback-reader))
-      (try
-        (let [eof (reify)]
-          (loop [form (read pushback-reader nil eof)
-                 out []]
-            (if (identical? form eof)
-              out
-              ;; FIXME shouldn't be source-nsym here
-              (let [env {:ns {:name source-nsym} :context :eval :locals {}}
-                    m (analyze* env form)]
-                (recur (read pushback-reader nil eof) (conj out m))))))
-        (finally
-          (pop-thread-bindings))))))
+
+  eg. (analyze-path (pb-reader-for-ns 'my.ns) 'my-ns 'my-ns)"
+  ([source-nsym] (analyze-ns (pb-reader-for-ns source-nsym) source-nsym source-nsym))
+  ([rdr source-path source-nsym]
+   (let [eof (reify)
+         ^LineNumberingPushbackReader 
+         pushback-reader (if (instance? LineNumberingPushbackReader rdr)
+                           rdr
+                           (LineNumberingPushbackReader. rdr))]
+     (do
+       (push-thread-bindings (thrd-bindings source-path source-nsym pushback-reader))
+       (try
+         (let [eof (reify)]
+           (loop [form (read pushback-reader nil eof)
+                  out []]
+             (if (identical? form eof)
+               out
+               ;; FIXME shouldn't be source-nsym here
+               (let [env {:ns {:name source-nsym} :context :eval :locals {}}
+                     m (analyze* env form)
+                     _ (eval form)]
+                 (recur (read pushback-reader nil eof) (conj out m))))))
+         (finally
+           (pop-thread-bindings)))))))
 
 (comment
   (ast 

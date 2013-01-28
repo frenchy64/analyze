@@ -118,6 +118,39 @@ analyze.core=> (-> (ast [(+ 1 2)]) e/map->form)
 [(. clojure.lang.Numbers add 1 2)]
 ```
 
+# Known Issues
+
+## Incorrect handling of Var mappings within the same form
+
+`analyze` is a thin wrapper over `clojure.lang.Compiler`, so to get our
+hands on analysis results some compromises are made.
+
+The following form normally evaluates to the Var `clojure.set/intersection`, but
+analyses to `clojure.core/require`.
+
+
+```clojure
+;normal evaluation
+(eval
+ '(do 
+    (require '[clojure.set])
+    (refer 'clojure.set 
+           :only '[intersection] 
+           :rename '{intersection require})
+    require))
+;=> #'clojure.set/intersection
+
+;analysis result
+(-> (ast 
+      (do (require '[clojure.set])
+        (refer 'clojure.set 
+               :only '[intersection] 
+               :rename '{intersection require})
+        require))
+  :exprs last :var)
+;=> #'clojure.core/require
+```
+
 # Todo
 
 - analyze a leiningen `project.clj` file
@@ -130,6 +163,6 @@ See `analyze.examples.*` namespaces.
 
 # Contributors
 
-Jonas Enlund (jonase)
-Nicola Mometto (Bronsa)
-Chris Gray (chrismgray)
+- Jonas Enlund (jonase)
+- Nicola Mometto (Bronsa)
+- Chris Gray (chrismgray)
