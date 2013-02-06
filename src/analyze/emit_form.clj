@@ -66,7 +66,7 @@
 
 (defmethod map->form [:fn-expr emit-default]
   [{:keys [methods variadic-method]} mode]
-  (list* 'fn* (map #(map->form % mode) (concat methods (when variadic-method [variadic-method])))))
+  (list* 'fn* (map #(map->form % mode) methods)))
 
 (defmethod map->form [:fn-method emit-default]
   [{:keys [body required-params rest-param]} mode]

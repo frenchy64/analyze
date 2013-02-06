@@ -13,7 +13,9 @@
   [expr _]
   (::hygienic-sym expr))
 
-(defn emit-hy [expr]
+(defn emit-hy 
+  "Emit an already-hygienic AST as a form"
+  [expr]
   (map->form expr hygienic-emit))
 
 ;; fold
