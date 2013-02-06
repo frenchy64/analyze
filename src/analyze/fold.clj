@@ -163,7 +163,7 @@
 (add-default-fold-case :instance-of
   (fn [expr _]
     (-> expr
-      (update-in [:the-exp] expr-rec))))
+      (update-in [:the-expr] expr-rec))))
 
 (add-default-fold-case :meta
   (fn [expr _]

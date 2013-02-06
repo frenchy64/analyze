@@ -30,6 +30,7 @@
   (hygienic-ast expr {}))
 
 (defn hygienic-ast [expr scope]
+  (assert expr)
   (assert scope)
   (fold-expr ::hygienic
     {:expr-rec #(hygienic-ast % scope)
