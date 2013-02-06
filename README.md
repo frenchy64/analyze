@@ -1,4 +1,4 @@
-Clojars Dependency: `[analyze "0.2.5"]`
+Clojars Dependency: `[analyze "0.2.6"]`
 
 # Interface to Clojure's Analyzer
 
@@ -16,8 +16,9 @@ http://clojure.org/contributing
 
 # Changelog
 
-0.2.6-SNAPSHOT
+0.2.6
 - More macroexpansion cases
+- `eval` forms after analysing them
 
 0.2.5
 - More cases for `map->form`

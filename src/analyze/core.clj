@@ -811,7 +811,8 @@
                       (str ".clj"))]
     (io/resource source-path)))
 
-(defn pb-reader-for-ns
+(defn ^LineNumberingPushbackReader
+  pb-reader-for-ns
   "Returns a LineNumberingPushbackReader for namespace ns-sym"
   [ns-sym]
   (let [uri (uri-for-ns ns-sym)]
