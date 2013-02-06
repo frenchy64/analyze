@@ -3,6 +3,8 @@
             [analyze.emit-form :refer [map->form derive-emit-default]]
             [analyze.core :refer [ast]]))
 
+(def hsym-key ::hygienic-sym)
+
 ;; emit
 
 (def hygienic-emit ::hygienic-emit)
@@ -11,7 +13,7 @@
 
 (defmethod map->form [:local-binding hygienic-emit]
   [expr _]
-  (::hygienic-sym expr))
+  (hsym-key expr))
 
 (defn emit-hy 
   "Emit an already-hygienic AST as a form"
@@ -52,7 +54,7 @@
                           hy-binding-init (-> binding-init
                                             (update-in [:init] update-init)
                                             (update-in [:local-binding :init] update-init)
-                                            (assoc-in [:local-binding ::hygienic-sym] hy-sym))
+                                            (assoc-in [:local-binding hsym-key] hy-sym))
                           new-scope (assoc scope sym hy-sym)]
                       [(conj hy-binding-inits hy-binding-init) new-scope]))
                   [[] scope] binding-inits)
@@ -76,7 +78,7 @@
                                    sym)
                           new-scope (assoc scope sym hy-sym)
                           hy-local-binding (assoc local-binding
-                                                  ::hygienic-sym hy-sym)]
+                                                  hsym-key hy-sym)]
                       [(conj hy-required-params hy-local-binding) new-scope]))
                   [[] scope] required-params)
 
@@ -90,7 +92,7 @@
                   new-scope (-> scope
                               (assoc sym hy-sym))
                   hy-local-binding (assoc rest-param
-                                          ::hygienic-sym hy-sym)]
+                                          hsym-key hy-sym)]
               [hy-local-binding new-scope])
             [rest-param scope])
 
@@ -112,7 +114,7 @@
           _ (assert hy-sym (str "Local " sym " not in scope."))]
       (assoc expr
              :init hy-init
-             ::hygienic-sym hy-sym))))
+             hsym-key hy-sym))))
 
 (comment
   (-> (ast (let [a 1 a a b a a a] a)) ast-hy emit-hy)
