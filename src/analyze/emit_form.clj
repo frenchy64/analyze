@@ -1,156 +1,169 @@
 (ns analyze.emit-form
   (:require [analyze.core :refer [ast]]))
 
-(defmulti map->form :op)
+(def emit-default ::emit-default)
 
-(defmethod map->form :nil [{:keys [val]}] val)
-(defmethod map->form :number [{:keys [val]}] val)
-(defmethod map->form :constant [{:keys [val]}] (list 'quote val))
-(defmethod map->form :string [{:keys [val]}] val)
-(defmethod map->form :boolean [{:keys [val]}] val)
-(defmethod map->form :keyword [{:keys [val]}] val)
+(defn derive-emit-default [tag]
+  (derive tag emit-default))
 
-(defmethod map->form :static-method 
-  [{:keys [class method-name args]}] 
+(declare map->form)
+
+(defn emit-form 
+  "Return the form represented by the given AST."
+  [expr]
+  (map->form expr ::emit-default))
+
+(defmulti map->form (fn [expr mode]
+                      [(:op expr) mode]))
+
+(defmethod map->form [:nil emit-default] [{:keys [val]} _] val)
+(defmethod map->form [:number emit-default] [{:keys [val]} _] val)
+(defmethod map->form [:constant emit-default] [{:keys [val]} _] (list 'quote val))
+(defmethod map->form [:string emit-default] [{:keys [val]} _] val)
+(defmethod map->form [:boolean emit-default] [{:keys [val]} _] val)
+(defmethod map->form [:keyword emit-default] [{:keys [val]} _] val)
+
+(defmethod map->form [:static-method emit-default]
+  [{:keys [class method-name args]} mode] 
   `(~(symbol (.getName class) (str method-name))
-       ~@(map map->form args)))
+       ~@(map #(map->form % mode) args)))
 
-(defmethod map->form :static-field 
-  [{:keys [class field-name]}]
+(defmethod map->form [:static-field emit-default]
+  [{:keys [class field-name]} _]
   (symbol (.getName class) (str field-name)))
 
-(defmethod map->form :invoke
-  [{:keys [fexpr args]}]
-  `(~(map->form fexpr)
-       ~@(map map->form args)))
+(defmethod map->form [:invoke emit-default]
+  [{:keys [fexpr args]} mode]
+  `(~(map->form fexpr mode)
+       ~@(map #(map->form % mode) args)))
 
 (defn- var->symbol [var]
   (symbol (str (ns-name (.ns var))) (str (.sym var))))
 
-(defmethod map->form :the-var
-  [{:keys [var]}]
+(defmethod map->form [:the-var emit-default]
+  [{:keys [var]} _]
   (list 'var (var->symbol var)))
 
-(defmethod map->form :var
-  [{:keys [var]}]
+(defmethod map->form [:var emit-default]
+  [{:keys [var]} _]
   (var->symbol var))
 
-(defmethod map->form :instance-method
-  [{:keys [target method-name args]}]
+(defmethod map->form [:instance-method emit-default]
+  [{:keys [target method-name args]} mode]
   `(~(symbol (str "." method-name))
-       ~(map->form target)
-       ~@(map map->form args)))
+       ~(map->form target mode)
+       ~@(map #(map->form % mode) args)))
 
-(defmethod map->form :new
-  [{:keys [class args]}]
+(defmethod map->form [:new emit-default]
+  [{:keys [class args]} mode]
   `(new ~(symbol (.getName class))
-        ~@(map map->form args)))
+        ~@(map #(map->form % mode) args)))
 
-(defmethod map->form :empty-expr [{:keys [coll]}] coll)
-(defmethod map->form :vector [{:keys [args]}] (vec (map map->form args)))
-(defmethod map->form :map [{:keys [keyvals]}] (apply hash-map (map map->form keyvals)))
-(defmethod map->form :set [{:keys [keys]}] (set (map map->form keys)))
+(defmethod map->form [:empty-expr emit-default] [{:keys [coll]} _] coll)
+(defmethod map->form [:vector emit-default] [{:keys [args]} mode] (vec (map #(map->form % mode) args)))
+(defmethod map->form [:map emit-default] [{:keys [keyvals]} mode] (apply hash-map (map #(map->form % mode) keyvals)))
+(defmethod map->form [:set emit-default] [{:keys [keys]} mode] (set (map #(map->form % mode) keys)))
 
-(defmethod map->form :fn-expr
-  [{:keys [methods variadic-method]}]
-  (list* 'fn* (map map->form (concat methods (when variadic-method [variadic-method])))))
+(defmethod map->form [:fn-expr emit-default]
+  [{:keys [methods variadic-method]} mode]
+  (list* 'fn* (map #(map->form % mode) (concat methods (when variadic-method [variadic-method])))))
 
-(defmethod map->form :fn-method
-  [{:keys [body required-params rest-param]}]
-  `(~(vec (concat (map map->form required-params)
+(defmethod map->form [:fn-method emit-default]
+  [{:keys [body required-params rest-param]} mode]
+  `(~(vec (concat (map #(map->form % mode) required-params)
                   (when rest-param
-                    ['& (map->form rest-param)])))
-       ~(map->form body)))
+                    ['& (map->form rest-param mode)])))
+       ~(map->form body mode)))
 
-(defmethod map->form :do
-  [{:keys [exprs]}]
+(defmethod map->form [:do emit-default]
+  [{:keys [exprs]} mode]
   (cond
     (empty? exprs) nil
-    (= 1 (count exprs)) (map->form (first exprs))
-    :else `(do ~@(map map->form exprs))))
+    (= 1 (count exprs)) (map->form (first exprs) mode)
+    :else `(do ~@(map #(map->form % mode) exprs))))
 
-(defmethod map->form :let
-  [{:keys [is-loop binding-inits body]}]
+(defmethod map->form [:let emit-default]
+  [{:keys [is-loop binding-inits body]} mode]
   `(~(if is-loop
        'loop*
        'let*)
-       ~(vec (apply concat (map map->form binding-inits)))
-       ~(map->form body)))
+       ~(vec (apply concat (map #(map->form % mode) binding-inits)))
+       ~(map->form body mode)))
 
-(defmethod map->form :recur
-  [{:keys [args]}]
-  `(recur ~@(map map->form args)))
+(defmethod map->form [:recur emit-default]
+  [{:keys [args]} mode]
+  `(recur ~@(map #(map->form % mode) args)))
           
 ;to be spliced
-(defmethod map->form :binding-init
-  [{:keys [local-binding init]}]
-  (map map->form [local-binding init]))
+(defmethod map->form [:binding-init emit-default]
+  [{:keys [local-binding init]} mode]
+  (map #(map->form % mode) [local-binding init]))
 
-(defmethod map->form :local-binding [{:keys [sym]}] sym)
-(defmethod map->form :local-binding-expr [{:keys [local-binding]}] (map->form local-binding))
+(defmethod map->form [:local-binding emit-default] [{:keys [sym]} _] sym)
+(defmethod map->form [:local-binding-expr emit-default] [{:keys [local-binding]} mode] (map->form local-binding mode))
 
-(defmethod map->form :if
-  [{:keys [test then else]}] 
-  `(if ~@(map map->form [test then else])))
+(defmethod map->form [:if emit-default]
+  [{:keys [test then else]} mode] 
+  `(if ~@(map #(map->form % mode) [test then else])))
 
-(defmethod map->form :instance-of
-  [{:keys [class the-expr]}] 
+(defmethod map->form [:instance-of emit-default]
+  [{:keys [class the-expr]} mode] 
   `(clojure.core/instance? ~(symbol (.getName class))
-                           ~(map->form the-expr)))
+                           ~(map->form the-expr mode)))
 
-(defmethod map->form :def
-  [{:keys [var init init-provided]}] 
+(defmethod map->form [:def emit-default]
+  [{:keys [var init init-provided]} mode] 
   `(def ~(.sym var) ~(when init-provided
-                       (map->form init))))
+                       (map->form init mode))))
 
 ;FIXME: methods don't print protocol/interface name
-(defmethod map->form :deftype*
-  [{:keys [name methods]}] 
+(defmethod map->form [:deftype* emit-default]
+  [{:keys [name methods]} mode] 
   (list* 'deftype* name 'FIXME
-         (map map->form methods)))
+         (map #(map->form % mode) methods)))
 
-(defmethod map->form :new-instance-method
-  [{:keys [name required-params body]}] 
-  (list name (vec (map map->form required-params))
-        (map->form body)))
+(defmethod map->form [:new-instance-method emit-default]
+  [{:keys [name required-params body]} mode] 
+  (list name (vec (map #(map->form % mode) required-params))
+        (map->form body mode)))
 
-(defmethod map->form :import*
-  [{:keys [class-str]}] 
+(defmethod map->form [:import* emit-default]
+  [{:keys [class-str]} _] 
   (list 'import* class-str))
 
-(defmethod map->form :keyword-invoke
-  [{:keys [kw target]}] 
-  (list (map->form kw) (map->form target)))
+(defmethod map->form [:keyword-invoke emit-default]
+  [{:keys [kw target]} mode] 
+  (list (map->form kw mode) (map->form target mode)))
 
-(defmethod map->form :throw
-  [{:keys [exception]}] 
-  (list 'throw (map->form exception)))
+(defmethod map->form [:throw emit-default]
+  [{:keys [exception]} mode] 
+  (list 'throw (map->form exception mode)))
 
-(defmethod map->form :try
-  [{:keys [try-expr catch-exprs finally-expr ]}] 
-  (list* 'try (map->form try-expr)
+(defmethod map->form [:try emit-default]
+  [{:keys [try-expr catch-exprs finally-expr]} mode] 
+  (list* 'try (map->form try-expr mode)
          (concat
-           (map map->form catch-exprs)
-           (when finally-expr [(list 'finally (map->form finally-expr))]))))
+           (map #(map->form % mode) catch-exprs)
+           (when finally-expr [(list 'finally (map->form finally-expr mode))]))))
 
-(defmethod map->form :catch
-  [{:keys [class local-binding handler]}]
-  (list 'catch (map->form local-binding) 
-        (map->form handler)))
+(defmethod map->form [:catch emit-default]
+  [{:keys [class local-binding handler]} mode]
+  (list 'catch (map->form local-binding mode) 
+        (map->form handler mode)))
 
 ;; (from Compiler.java)
 ;;  //(case* expr shift mask default map<minhash, [test then]> table-type test-type skip-check?)
-(defmethod map->form :case*
-  [{:keys [the-expr tests thens default tests-hashes shift mask low high switch-type test-type skip-check]}]
+(defmethod map->form [:case* emit-default]
+  [{:keys [the-expr tests thens default tests-hashes shift mask low high switch-type test-type skip-check]} mode]
   (list 'case*
-        (map->form the-expr)
+        (map->form the-expr mode)
         shift
         mask
-        (map->form default)
+        (map->form default mode)
         (zipmap tests-hashes
                 (map vector
-                     (map map->form tests)
-                     (map map->form thens)))
+                     (map #(map->form % mode) tests)
+                     (map #(map->form % mode) thens)))
         switch-type
         test-type
         skip-check))
