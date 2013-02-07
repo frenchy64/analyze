@@ -65,8 +65,12 @@
 (defmethod map->form [:set emit-default] [{:keys [keys]} mode] (set (map #(map->form % mode) keys)))
 
 (defmethod map->form [:fn-expr emit-default]
-  [{:keys [methods variadic-method]} mode]
-  (list* 'fn* (map #(map->form % mode) methods)))
+  [{:keys [name methods]} mode]
+  (list* 'fn* 
+         (concat
+           (when name
+             [name])
+           (map #(map->form % mode) methods))))
 
 (defmethod map->form [:fn-method emit-default]
   [{:keys [body required-params rest-param]} mode]
@@ -118,8 +122,15 @@
 
 ;FIXME: methods don't print protocol/interface name
 (defmethod map->form [:deftype* emit-default]
-  [{:keys [name methods]} mode] 
-  (list* 'deftype* name 'FIXME
+  [{:keys [name methods fields covariants ^Class compiled-class]} mode]
+  (list* 'deftype* 
+         (symbol (apply str (last (partition-by #{\.} (str name)))))
+         name
+         ;FIXME these should be hinted fields
+         (vec (map first fields))
+         :implements
+         ;FIXME interfaces implemented
+         []
          (map #(map->form % mode) methods)))
 
 (defmethod map->form [:new-instance-method emit-default]
@@ -148,7 +159,8 @@
 
 (defmethod map->form [:catch emit-default]
   [{:keys [class local-binding handler]} mode]
-  (list 'catch (map->form local-binding mode) 
+  (list 'catch (symbol (.getName class))
+        (map->form local-binding mode) 
         (map->form handler mode)))
 
 ;; (from Compiler.java)
@@ -171,7 +183,7 @@
 
 (comment
   (defmacro frm [f]
-    `(-> (ast ~f) map->form))
+    `(-> (ast ~f) emit-form))
 
   (frm 1)
   (frm :a)
@@ -230,4 +242,12 @@
   (frm #{1 2 3})
   (frm (case 1 2 3 4))
   (frm (case 1 :a 3 4))
+
+  (frm (deftype A [a b]
+         Object
+         (toString [this])))
+  (macroexpand
+    '(deftype A [a b]
+      Object
+      (toString [this])))
   )

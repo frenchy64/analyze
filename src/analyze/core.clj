@@ -556,6 +556,7 @@
           {:Expr-obj expr}))))
 
   ;; NewInstanceExpr
+;FIXME find vector of interfaces this implements (I think it's in mmap + IType)
   Compiler$NewInstanceExpr
   (analysis->map
     [expr env]
@@ -563,21 +564,22 @@
       (merge
         {:op :deftype*
          :name (symbol (.name expr))
-         :env env
-            ; non-existent 
-;            (assoc env 
-;                     :line (.line expr))
+         :env (assoc env 
+                     :line (.line expr)
+                     ;:column (.col expr)
+                     )
          :methods methods
          :mmap (field Compiler$NewInstanceExpr mmap expr)
 
-         ;Reflection
-         ;TODO unordered? where is the ordered field list
-;         :fields (into {} (for [[k v] (.fields expr)] ;this is private!
-;                            [k (analysis->map v env)]))
+         :compiled-class (.compiledClass expr)
+         :internal-name (.internalName expr)
+         :this-name (.thisName expr)
+
+         ;(IPersistentMap Symbol LocalBinding)
+         :fields (into {} (for [[k v] (field Compiler$ObjExpr fields expr)]
+                            [k (analysis->map v env)]))
          
-         ;Reflection
-         ;What is this?
-         ;:covariants (field 'covariants expr)
+         :covariants (field Compiler$NewInstanceExpr covariants expr)
 
          :tag (.tag expr)}
         (when @CHILDREN
@@ -889,5 +891,6 @@
   (ast (do 
          (require '[clojure.repl :refer [pst]])
          (pst)))
-
-  )
+  (ast (deftype A [a b]
+         Object
+         (toString [this]))))
