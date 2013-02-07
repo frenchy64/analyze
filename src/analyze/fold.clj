@@ -129,7 +129,7 @@
   (fn [expr _]
     (-> expr
       (update-in [:kw] expr-rec)
-      (update-in [:target] map-expr-rec))))
+      (update-in [:target] expr-rec))))
 
 (add-default-fold-case :the-var return-first)
 (add-default-fold-case :var return-first)
