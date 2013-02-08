@@ -127,7 +127,7 @@
          (symbol (apply str (last (partition-by #{\.} (str name)))))
          name
          ;FIXME these should be hinted fields
-         (vec (map first fields))
+         (vec (map #(map->form % mode) fields))
          :implements
          ;FIXME interfaces implemented
          []

@@ -19,6 +19,7 @@ http://clojure.org/contributing
 0.2.6
 - More macroexpansion cases
 - `eval` forms after analysing them
+- changes to :deftype*
 
 0.2.5
 - More cases for `map->form`

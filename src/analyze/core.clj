@@ -575,9 +575,9 @@
          :internal-name (.internalName expr)
          :this-name (.thisName expr)
 
-         ;(IPersistentMap Symbol LocalBinding)
-         :fields (into {} (for [[k v] (field Compiler$ObjExpr fields expr)]
-                            [k (analysis->map v env)]))
+         ;(IPersistentSet LocalBinding)
+         :fields (set (for [[k v] (field Compiler$ObjExpr fields expr)]
+                        (analysis->map v env)))
          
          :covariants (field Compiler$NewInstanceExpr covariants expr)
 

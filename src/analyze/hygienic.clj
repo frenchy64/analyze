@@ -58,7 +58,9 @@
   (let [hy-init (when init
                   (hygienic-ast init scope))
         hy-sym (if new-sym?
-                 (gensym sym)
+                 (if (scope sym)
+                   (gensym sym)
+                   sym)
                  (scope sym))
         _ (assert hy-sym (str "Local " sym " not in scope."))]
     (assoc local-binding
@@ -165,15 +167,19 @@
 
 (add-fold-case ::hygienic
   :deftype*
-  (fn [{:keys [fields] :as expr}
+  (fn [{:keys [fields methods] :as expr}
        {{scope ::scope} :locals}]
-    (let [[hy-field-vals scope
+    (let [[hy-fields scope]
           (reduce (fn [[hy-lbs scope] lb]
                     (let [hy-lb (hygienic-local-binding lb scope true)
                           scope (add-scope scope (:sym hy-lb) (hsym-key hy-lb))]
                       [(conj hy-lbs hy-lb) scope]))
-                  [[] scope] (vals fields))
-          hy-fields (zipmap (keys fields) hy-field-vals)]
+                  [[] scope] fields)
+          hy-methods (map #(hygienic-ast % scope) methods)]
+      (assoc expr
+             :fields hy-fields
+             :methods hy-methods))))
+
 
 (comment
   (-> (ast (let [a 1 a a b a a a] a)) ast-hy emit-hy)
@@ -182,4 +188,6 @@
   (-> (ast (fn [a a & a] a)) ast-hy emit-hy)
   (-> (ast (let [a 1] (fn a [] a))) ast-hy emit-hy)
   (-> (ast (let [a 1] (try a (catch Exception a a)))) ast-hy emit-hy)
+
+  (-> (ast (deftype A [a] Object (toString [a] a))) ast-hy emit-hy)
   )
