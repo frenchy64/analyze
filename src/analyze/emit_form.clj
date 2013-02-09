@@ -94,6 +94,12 @@
        ~(vec (apply concat (map #(map->form % mode) binding-inits)))
        ~(map->form body mode)))
 
+(defmethod map->form [:letfn emit-default]
+  [{:keys [binding-inits body]} mode]
+  `(~'letfn*
+       ~(vec (apply concat (map #(map->form % mode) binding-inits)))
+       ~(map->form body mode)))
+
 (defmethod map->form [:recur emit-default]
   [{:keys [args]} mode]
   `(recur ~@(map #(map->form % mode) args)))
@@ -248,6 +254,11 @@
          (toString [this])))
   (macroexpand
     '(deftype A [a b]
-      Object
-      (toString [this])))
-  )
+       Object
+       (toString [this])))
+
+   (frm (letfn [(a [b] b)
+                (b [a] a)
+                (c [c] a)]
+          (a b c)))
+)

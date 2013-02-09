@@ -58,9 +58,7 @@
   (let [hy-init (when init
                   (hygienic-ast init scope))
         hy-sym (if new-sym?
-                 (if (scope sym)
-                   (gensym sym)
-                   sym)
+                 (hygienic-sym scope sym)
                  (scope sym))
         _ (assert hy-sym (str "Local " sym " not in scope."))]
     (assoc local-binding
@@ -98,48 +96,43 @@
              :binding-inits hy-binding-inits 
              :body hy-body))))
 
+(defn hygienic-name [name scope]
+  (let [hy-name (when name
+                  (hygienic-sym scope name))
+        new-scope (if hy-name
+                    (add-scope scope name hy-name)
+                    scope)]
+    [hy-name new-scope]))
+
 ;fn-expr
 (add-fold-case ::hygienic
   :fn-expr
   (fn [{:keys [name methods] :as expr}
        {{scope ::scope} :locals}]
-    (let [[hy-name scope] (let [hy-name (when name
-                                          (hygienic-sym scope name))
-                                new-scope (if hy-name
-                                            (add-scope scope name hy-name)
-                                            scope)]
-                            [hy-name new-scope])
+    (let [[hy-name scope] (hygienic-name name scope)
           hy-methods (map #(hygienic-ast % scope) methods)]
       (assoc expr
              hname-key hy-name
              :methods hy-methods))))
+
+(defn hygienic-lbs [lbs scope]
+  (reduce (fn [[hy-lbs scope] {:keys [sym] :as local-binding}]
+            {:pre [(vector? hy-lbs)]}
+            (let [hy-local-binding (hygienic-local-binding local-binding scope true)
+                  hy-sym (hsym-key hy-local-binding)
+                  new-scope (add-scope scope sym hy-sym)]
+              [(conj hy-lbs hy-local-binding) new-scope]))
+          [[] scope] lbs))
 
 ;fn-method
 (add-fold-case ::hygienic
   :fn-method
   (fn [{:keys [required-params rest-param body] :as expr}
        {{scope ::scope} :locals}]
-    (let [[hy-required-params scope]
-          (reduce (fn [[hy-required-params scope] {:keys [sym] :as local-binding}]
-                    {:pre [(vector? hy-required-params)]}
-                    (let [hy-sym (hygienic-sym scope sym)
-                          new-scope (add-scope scope sym hy-sym)
-                          hy-local-binding (assoc local-binding
-                                                  hsym-key hy-sym)]
-                      [(conj hy-required-params hy-local-binding) new-scope]))
-                  [[] scope] required-params)
-
-          [hy-rest-param scope]
-          (if-let [{:keys [sym]} rest-param]
-            ; use new scope
-            (let [hy-sym (hygienic-sym scope sym)
-
-                  new-scope (add-scope scope sym hy-sym)
-                  hy-local-binding (assoc rest-param
-                                          hsym-key hy-sym)]
-              [hy-local-binding new-scope])
-            [rest-param scope])
-
+    (let [[hy-required-params scope] (hygienic-lbs required-params scope)
+          [[hy-rest-param] scope] (if rest-param
+                                    (hygienic-lbs [rest-param] scope)
+                                    [[rest-param] scope])
           ; use new scope
           hy-body (hygienic-ast body scope)]
       (assoc expr
@@ -174,12 +167,49 @@
                     (let [hy-lb (hygienic-local-binding lb scope true)
                           scope (add-scope scope (:sym hy-lb) (hsym-key hy-lb))]
                       [(conj hy-lbs hy-lb) scope]))
-                  [[] scope] fields)
+                  [#{} scope] fields)
           hy-methods (map #(hygienic-ast % scope) methods)]
       (assoc expr
              :fields hy-fields
              :methods hy-methods))))
 
+(add-fold-case ::hygienic
+  :new-instance-method
+  (fn [{:keys [name required-params body] :as expr}
+       {{scope ::scope} :locals}]
+    (let [[hy-name scope] (hygienic-name name scope)
+          [hy-required-params scope] (hygienic-lbs required-params scope)
+          ; use new scope
+          hy-body (hygienic-ast body scope)]
+      (assoc expr
+             :name hy-name
+             :required-params hy-required-params
+             :body hy-body))))
+
+(add-fold-case ::hygienic
+  :letfn
+  (fn [{:keys [binding-inits body] :as expr}
+       {{scope ::scope} :locals}]
+    (let [;find scope of each binding init and body
+          ;binit-hsyms is a vector of symbols, corresponding to the hsym for each binit
+          [binit-hsyms scope]
+          (reduce (fn [[hsyms scope] sym]
+                    (let [hsym (hygienic-sym scope sym)]
+                      [(conj hsyms hsym) (add-scope scope sym hsym)]))
+                  [[] scope]
+                  (map #(-> % :local-binding :sym) binding-inits))
+          hy-binding-inits
+          (reduce (fn [hy-binding-inits [hy-sym binding-init]]
+                    (let [hy-binding-init (-> binding-init
+                                            (update-in [:init] hygienic-ast scope)
+                                            (update-in [:local-binding :init] hygienic-ast scope)
+                                            (assoc-in [:local-binding hsym-key] hy-sym))]
+                      (conj hy-binding-inits hy-binding-init)))
+                  [] (map vector binit-hsyms binding-inits))
+          hy-body (hygienic-ast body scope)]
+      (assoc expr
+             :binding-inits hy-binding-inits
+             :body hy-body))))
 
 (comment
   (-> (ast (let [a 1 a a b a a a] a)) ast-hy emit-hy)
@@ -189,5 +219,36 @@
   (-> (ast (let [a 1] (fn a [] a))) ast-hy emit-hy)
   (-> (ast (let [a 1] (try a (catch Exception a a)))) ast-hy emit-hy)
 
+  (-> (ast (deftype A [a] Object (toString [_] a))) ast-hy emit-hy)
   (-> (ast (deftype A [a] Object (toString [a] a))) ast-hy emit-hy)
+  
+  (->
+    (ast
+      (deftype Pair [lhs rhs]
+        clojure.lang.Counted
+        (count [_] 2)
+        clojure.lang.Indexed
+        (nth [_ i] (case i
+                     0 lhs
+                     1 rhs
+                     (throw (IndexOutOfBoundsException.))))
+        (nth [_ i not-found] (case i
+                               0 lhs
+                               1 rhs
+                               not-found))
+        java.util.Map$Entry
+        (getKey [_] lhs)
+        (getValue [_] rhs)
+        Object
+        (toString [_]
+          (str "(" lhs " . " rhs ")")))
+      )
+    ast-hy emit-hy)
+
+  (-> (ast (letfn [(a [b] b)
+                   (b [a] a)
+                   (c [c] a)
+                   (a [])]
+             (a b c)))
+    ast-hy emit-hy)
   )
