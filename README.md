@@ -1,4 +1,4 @@
-Clojars Dependency: `[analyze "0.2.6"]`
+Clojars Dependency: `[analyze "0.3.0"]`
 
 # Interface to Clojure's Analyzer
 
@@ -15,6 +15,13 @@ Pull requests accepted from registered Clojure contributers
 http://clojure.org/contributing
 
 # Changelog
+
+0.3.0
+- New Hygienic transformation namespace, `analyze.hygiene`
+  - `ast-hy`, AST -> hygienic AST
+  - `emit-hy`, hygienic AST -> hygienic form
+- `map->form` now extensible
+- Fix emitting variadic method twice in `map->form` case for :fn-expr
 
 0.2.6
 - More macroexpansion cases

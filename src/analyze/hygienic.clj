@@ -3,6 +3,22 @@
             [analyze.emit-form :refer [map->form derive-emit-default]]
             [analyze.core :refer [ast]]))
 
+(declare hygienic-emit hygienic-ast)
+
+(defn ast-hy 
+  "Perform hygienic transformation on an AST
+
+  eg. (-> (ast ...) ast-hy)"
+  [expr]
+  (hygienic-ast expr {}))
+
+(defn emit-hy 
+  "Emit an already-hygienic AST as a form.
+
+  eg. (-> (ast ...) ast-hy emit-hy)"
+  [expr]
+  (map->form expr hygienic-emit))
+
 (def hsym-key ::hygienic-sym)
 (def hname-key ::hygienic-name)
 
@@ -16,7 +32,6 @@
   [expr _]
   (hsym-key expr))
 
-
 (defmethod map->form [:fn-expr hygienic-emit]
   [{:keys [methods] :as expr} mode]
   (list* 'fn* 
@@ -25,19 +40,11 @@
              [name])
            (map #(map->form % mode) methods))))
 
-(defn emit-hy 
-  "Emit an already-hygienic AST as a form"
-  [expr]
-  (map->form expr hygienic-emit))
-
 ;; fold
 
 (derive-default-fold ::hygienic)
 
 (declare hygienic-ast)
-
-(defn ast-hy [expr]
-  (hygienic-ast expr {}))
 
 (defn hygienic-ast [expr scope]
   (assert expr)
