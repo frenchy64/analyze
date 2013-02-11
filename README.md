@@ -121,9 +121,9 @@ nil
 ```clojure
 analyze.core=> (require '[analyze.emit-form :as e])
 nil
-analyze.core=> (-> (ast 1) e/map->form)
+analyze.core=> (-> (ast 1) e/emit-form)
 1
-analyze.core=> (-> (ast [(+ 1 2)]) e/map->form)
+analyze.core=> (-> (ast [(+ 1 2)]) e/emit-form)
 [(. clojure.lang.Numbers add 1 2)]
 ```
 
