@@ -1,3 +1,5 @@
+# This repository has moved: [jvm.tools.analyzer](https://github.com/clojure/jvm.tools.analyzer)
+
 Clojars Dependency: `[analyze "0.3.0"]`
 
 # Interface to Clojure's Analyzer
